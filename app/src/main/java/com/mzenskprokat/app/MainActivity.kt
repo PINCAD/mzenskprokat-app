@@ -3,12 +3,27 @@ package com.mzenskprokat.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
@@ -16,10 +31,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.mzenskprokat.app.ui.screens.*
+import com.mzenskprokat.app.ui.screens.CatalogScreen
+import com.mzenskprokat.app.ui.screens.ContactsScreen
+import com.mzenskprokat.app.ui.screens.HomeScreen
+import com.mzenskprokat.app.ui.screens.OrderScreen
+import com.mzenskprokat.app.ui.screens.ProductDetailScreen
 import com.mzenskprokat.app.ui.theme.MzenskProkatTheme
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,10 +74,11 @@ fun MainApp() {
         Screen.Contacts
     )
 
-    // Определяем, показывать ли нижнюю панель
     val showBottomBar = currentRoute in bottomNavItems.map { it.route }
 
     Scaffold(
+        // ВАЖНО: задаём фон для всего экрана (убирает "остаточные" кадры)
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -70,26 +88,22 @@ fun MainApp() {
                             label = { Text(screen.title) },
                             selected = currentRoute == screen.route,
                             colors = NavigationBarItemDefaults.colors(
-                                // Цвет иконки на "таблетке" (белый)
                                 selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                // Цвет "таблетки" (синий)
                                 indicatorColor = MaterialTheme.colorScheme.primary,
-                                // Цвет текста, когда он выбран (синий)
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
-                                // Цвета невыбранных элементов (серые)
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             onClick = {
                                 if (currentRoute != screen.route) {
                                     navController.navigate(screen.route) {
-                                        // Очищаем весь стек до Home
+                                        // Стандартное поведение для вкладок:
+                                        // сохраняем состояние и возвращаем его при повторном выборе вкладки
                                         popUpTo(navController.graph.startDestinationId) {
-                                            saveState = false
+                                            saveState = true
                                         }
-                                        // Не сохраняем и не восстанавливаем состояние
                                         launchSingleTop = true
-                                        restoreState = false
+                                        restoreState = true
                                     }
                                 }
                             }
@@ -99,35 +113,51 @@ fun MainApp() {
             }
         }
     ) { innerPadding ->
-        NavigationGraph(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding)
-        )
+        // ВАЖНО: Surface с фоном и fillMaxSize, чтобы не было прозрачных "дыр"
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            NavigationGraph(
+                navController = navController,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
 @Composable
 fun NavigationGraph(
     navController: NavHostController,
-    modifier: Modifier = Modifier // <-- Принимаем modifier
+    modifier: Modifier = Modifier
 ) {
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
-        modifier = modifier, // <-- Применяем modifier,
+        modifier = modifier,
+        // у тебя и так выключены анимации — оставляем
         enterTransition = { EnterTransition.None },
         exitTransition = { ExitTransition.None },
         popEnterTransition = { EnterTransition.None },
         popExitTransition = { ExitTransition.None }
-
     ) {
         composable(Screen.Home.route) {
             HomeScreen(
                 onNavigateToCatalog = {
-                    navController.navigate(Screen.Catalog.route)
+                    navController.navigate(Screen.Catalog.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 },
                 onNavigateToOrder = {
-                    navController.navigate(Screen.Order.route)
+                    navController.navigate(Screen.Order.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 }
             )
         }
@@ -153,11 +183,13 @@ fun NavigationGraph(
             if (productId != null) {
                 ProductDetailScreen(
                     productId = productId,
-                    onBackClick = {
-                        navController.popBackStack()
-                    },
+                    onBackClick = { navController.popBackStack() },
                     onOrderClick = {
-                        navController.navigate(Screen.Order.route)
+                        navController.navigate(Screen.Order.route) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }

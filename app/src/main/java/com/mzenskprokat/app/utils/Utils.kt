@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Patterns
 import java.util.regex.Pattern
-
 /**
  * Объект для валидации данных форм
  */

@@ -4,6 +4,8 @@ import com.mzenskprokat.app.models.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
+private val telegramService = TelegramNotificationService()
+
 class ProductRepository {
 
     // Получить все продукты
@@ -47,13 +49,34 @@ class ProductRepository {
     fun submitOrder(order: OrderRequest): Flow<Result<Boolean>> = flow {
         emit(Result.Loading)
         try {
-            // Здесь будет логика отправки заявки на сервер или по email
-            // Для примера просто возвращаем успех
-            emit(Result.Success(true))
+            val text = buildString {
+                appendLine("📦 НОВАЯ ЗАЯВКА")
+                appendLine("👤 Имя: ${order.customerName}")
+                appendLine("📞 Телефон: ${order.phone}")
+                appendLine("📧 Email: ${order.email}")
+                appendLine("🧾 Продукция: ${order.productName}")
+                appendLine("⚖️ Количество: ${order.quantity}")
+                if (order.comment.isNotBlank()) appendLine("💬 Комментарий: ${order.comment}")
+                val formattedTime = java.text.SimpleDateFormat(
+                    "dd.MM.yyyy HH:mm",
+                    java.util.Locale.getDefault()
+                ).format(java.util.Date(order.timestamp))
+
+                appendLine("🕒 Дата: $formattedTime")
+
+            }
+
+            val sendResult = telegramService.sendText(text)
+            if (sendResult.isSuccess) {
+                emit(Result.Success(true))
+            } else {
+                emit(Result.Error(sendResult.exceptionOrNull()?.message ?: "Не удалось отправить в Telegram"))
+            }
         } catch (e: Exception) {
             emit(Result.Error(e.message ?: "Ошибка отправки заявки"))
         }
     }
+
 
     // Получить данные для главной страницы
     fun getHomeData(): Flow<Result<HomeData>> = flow {
