@@ -158,6 +158,9 @@ fun NavigationGraph(
                         launchSingleTop = true
                         restoreState = true
                     }
+                },
+                onNavigateToProductDetail = { productId ->
+                    navController.navigate(Screen.ProductDetail.createRoute(productId))
                 }
             )
         }

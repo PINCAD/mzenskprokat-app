@@ -7,45 +7,58 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mzenskprokat.app.models.OrderRequest
 import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.viewmodels.OrderViewModel
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.automirrored.outlined.Send
 
 @Composable
 fun OrderScreen(
     orderViewModel: OrderViewModel = viewModel()
 ) {
-    var customerName by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var productName by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("") }
-    var comment by remember { mutableStateOf("") }
+    var customerName by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var productName by rememberSaveable { mutableStateOf("") }
+    var quantity by rememberSaveable { mutableStateOf("") }
+    var comment by rememberSaveable { mutableStateOf("") }
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var showErrorDialog by remember { mutableStateOf(false) }
 
-    val orderState by orderViewModel.orderState.collectAsState()
+    val orderState by orderViewModel.orderState.collectAsStateWithLifecycle()
 
-    // derived states
     val isLoading = orderState is Result.Loading
+    val errorMessage = (orderState as? Result.Error)?.message
+    val isSuccess = (orderState as? Result.Success)?.data == true
 
-    val errorMessage: String? = when (orderState) {
-        is Result.Error -> (orderState as Result.Error).message
-        else -> null
+    val isFormValid by remember(customerName, phone, email, productName, quantity) {
+        derivedStateOf {
+            customerName.isNotBlank() &&
+                    phone.isNotBlank() &&
+                    email.isNotBlank() &&
+                    productName.isNotBlank() &&
+                    quantity.isNotBlank()
+        }
     }
 
-    // success tracking
-    val isSuccess: Boolean = when (orderState) {
-        is Result.Success -> (orderState as Result.Success<Boolean>).data == true
-        else -> false
+    fun clearForm() {
+        customerName = ""
+        phone = ""
+        email = ""
+        productName = ""
+        quantity = ""
+        comment = ""
     }
 
     LaunchedEffect(isSuccess) {
@@ -53,7 +66,7 @@ fun OrderScreen(
     }
 
     LaunchedEffect(errorMessage) {
-        if (errorMessage != null) showErrorDialog = true
+        if (!errorMessage.isNullOrBlank()) showErrorDialog = true
     }
 
     LazyColumn(
@@ -63,11 +76,7 @@ fun OrderScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -94,11 +103,7 @@ fun OrderScreen(
         }
 
         item {
-            Text(
-                text = "Контактные данные",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Контактные данные", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
 
         item {
@@ -143,11 +148,7 @@ fun OrderScreen(
 
         item {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Информация о заказе",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Информация о заказе", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
 
         item {
@@ -155,7 +156,7 @@ fun OrderScreen(
                 value = productName,
                 onValueChange = { productName = it },
                 label = { Text("Наименование продукции *") },
-                leadingIcon = { Icon(Icons.Outlined.List, contentDescription = null) },
+                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.List, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 placeholder = { Text("Например: Х20Н80") },
@@ -168,7 +169,7 @@ fun OrderScreen(
                 value = quantity,
                 onValueChange = { quantity = it },
                 label = { Text("Количество *") },
-                leadingIcon = { Icon(Icons.Outlined.ShoppingCart, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Outlined.Scale, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 placeholder = { Text("Например: 100 кг") },
@@ -191,11 +192,7 @@ fun OrderScreen(
         }
 
         item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -215,12 +212,6 @@ fun OrderScreen(
         }
 
         item {
-            val isFormValid = customerName.isNotBlank() &&
-                    phone.isNotBlank() &&
-                    email.isNotBlank() &&
-                    productName.isNotBlank() &&
-                    quantity.isNotBlank()
-
             Button(
                 onClick = {
                     val order = OrderRequest(
@@ -245,7 +236,7 @@ fun OrderScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Отправка...")
                 } else {
-                    Icon(Icons.Outlined.Send, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Отправить заявку")
                 }
@@ -255,18 +246,12 @@ fun OrderScreen(
         item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 
-    // Success dialog
     if (showSuccessDialog) {
         AlertDialog(
             onDismissRequest = {
                 showSuccessDialog = false
                 orderViewModel.resetOrderState()
-                customerName = ""
-                phone = ""
-                email = ""
-                productName = ""
-                quantity = ""
-                comment = ""
+                clearForm()
             },
             icon = {
                 Icon(
@@ -277,27 +262,17 @@ fun OrderScreen(
                 )
             },
             title = { Text("Заявка отправлена!") },
-            text = {
-                Text("Спасибо за вашу заявку! Наш менеджер свяжется с вами в ближайшее время для уточнения деталей заказа.")
-            },
+            text = { Text("Спасибо! Наш менеджер свяжется с вами в ближайшее время.") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showSuccessDialog = false
-                        orderViewModel.resetOrderState()
-                        customerName = ""
-                        phone = ""
-                        email = ""
-                        productName = ""
-                        quantity = ""
-                        comment = ""
-                    }
-                ) { Text("Отлично") }
+                Button(onClick = {
+                    showSuccessDialog = false
+                    orderViewModel.resetOrderState()
+                    clearForm()
+                }) { Text("Отлично") }
             }
         )
     }
 
-    // Error dialog
     if (showErrorDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -313,16 +288,12 @@ fun OrderScreen(
                 )
             },
             title = { Text("Ошибка отправки") },
-            text = {
-                Text(errorMessage ?: "Произошла ошибка при отправке заказа. Пожалуйста, попробуйте позже.")
-            },
+            text = { Text(errorMessage ?: "Произошла ошибка при отправке заказа. Попробуйте позже.") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showErrorDialog = false
-                        orderViewModel.resetOrderState()
-                    }
-                ) { Text("OK") }
+                Button(onClick = {
+                    showErrorDialog = false
+                    orderViewModel.resetOrderState()
+                }) { Text("OK") }
             }
         )
     }

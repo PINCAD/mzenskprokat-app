@@ -19,3 +19,14 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Retrofit / OkHttp обычно ок, но на всякий случай сохраняем аннотации
+-keepattributes Signature
+-keepattributes Exceptions
+-keepattributes *Annotation*
+
+# Gson: если используешь рефлексию без @SerializedName — лучше не обфусцировать модели
+# (если модели простые — можно убрать)
+-keep class com.mzenskprokat.app.** { *; }
+
+# Если используются лямбды/инлайн — обычно Compose сам нормально дружит с R8.

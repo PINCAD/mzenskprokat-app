@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// ViewModel для формы заказа
 class OrderViewModel(
     private val repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
@@ -18,8 +17,10 @@ class OrderViewModel(
     private val _orderState = MutableStateFlow<Result<Boolean>>(Result.Idle)
     val orderState: StateFlow<Result<Boolean>> = _orderState.asStateFlow()
 
-    // Метод отправки заказа через репозиторий (как используется на экране OrderScreen)
     fun submitOrder(order: OrderRequest) {
+        // Защита от повторных отправок
+        if (_orderState.value is Result.Loading) return
+
         _orderState.value = Result.Loading
         viewModelScope.launch {
             repository.submitOrder(order).collect { result ->
@@ -32,15 +33,3 @@ class OrderViewModel(
         _orderState.value = Result.Idle
     }
 }
-
-// Вспомогательный класс состояния формы (оставляем здесь на случай использования)
-data class OrderFormState(
-    val customerName: String = "",
-    val phone: String = "",
-    val email: String = "",
-    val productName: String = "",
-    val quantity: String = "",
-    val comment: String = "",
-    val isSubmitting: Boolean = false,
-    val error: String? = null
-)

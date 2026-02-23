@@ -4,93 +4,80 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mzenskprokat.app.models.*
 import com.mzenskprokat.app.repository.ProductRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 
-// ViewModel для главного экрана
+/**
+ * ViewModel для главного экрана
+ */
 class HomeViewModel(
-    private val repository: ProductRepository = ProductRepository()
+    repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
 
-    private val _homeData = MutableStateFlow<Result<HomeData>>(Result.Loading)
-    val homeData: StateFlow<Result<HomeData>> = _homeData.asStateFlow()
-
-    init {
-        loadHomeData()
-    }
-
-    private fun loadHomeData() {
-        viewModelScope.launch {
-            repository.getHomeData().collect { result ->
-                _homeData.value = result
-            }
-        }
-    }
+    val homeData: StateFlow<Result<HomeData>> =
+        repository.getHomeData()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Result.Loading)
 }
 
-// ViewModel для каталога продукции
+/**
+ * ViewModel для каталога продукции
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ProductCatalogViewModel(
-    private val repository: ProductRepository = ProductRepository()
+    repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
 
-    private val _products = MutableStateFlow<Result<List<Product>>>(Result.Loading)
-    val products: StateFlow<Result<List<Product>>> = _products.asStateFlow()
+    private val selectedCategory = MutableStateFlow<ProductCategory?>(null)
+    private val searchQuery = MutableStateFlow("")
 
-    private val _selectedCategory = MutableStateFlow<ProductCategory?>(null)
-    val selectedCategory: StateFlow<ProductCategory?> = _selectedCategory.asStateFlow()
+    val selectedCategoryState: StateFlow<ProductCategory?> = selectedCategory.asStateFlow()
+    val searchQueryState: StateFlow<String> = searchQuery.asStateFlow()
 
-    init {
-        loadAllProducts()
-    }
+    val products: StateFlow<Result<List<Product>>> =
+        combine(selectedCategory, searchQuery) { cat, q -> cat to q.trim() }
+            .distinctUntilChanged()
+            .flatMapLatest { (cat, q) ->
+                when {
+                    q.isNotEmpty() -> repository.searchProducts(q)
+                    cat != null -> repository.getProductsByCategory(cat)
+                    else -> repository.getAllProducts()
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Result.Loading)
 
     fun loadAllProducts() {
-        viewModelScope.launch {
-            repository.getAllProducts().collect { result ->
-                _products.value = result
-            }
-        }
-        _selectedCategory.value = null
+        selectedCategory.value = null
+        searchQuery.value = ""
     }
 
     fun filterByCategory(category: ProductCategory) {
-        viewModelScope.launch {
-            repository.getProductsByCategory(category).collect { result ->
-                _products.value = result
-            }
-        }
-        _selectedCategory.value = category
+        selectedCategory.value = category
+        searchQuery.value = ""
     }
 
-    fun searchProducts(query: String) {
-        viewModelScope.launch {
-            repository.getAllProducts().collect { result ->
-                if (result is Result.Success) {
-                    val filtered = result.data.filter { product ->
-                        product.name.contains(query, ignoreCase = true) ||
-                                product.alloys.any { it.contains(query, ignoreCase = true) }
-                    }
-                    _products.value = Result.Success(filtered)
-                }
-            }
-        }
+    fun setSearchQuery(query: String) {
+        searchQuery.value = query
     }
 }
 
-// ViewModel для детального просмотра продукта
+/**
+ * ViewModel для детального просмотра продукта
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ProductDetailViewModel(
-    private val repository: ProductRepository = ProductRepository()
+    repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
 
-    private val _product = MutableStateFlow<Result<Product>>(Result.Loading)
-    val product: StateFlow<Result<Product>> = _product.asStateFlow()
+    private val productId = MutableStateFlow<String?>(null)
 
-    fun loadProduct(productId: String) {
-        viewModelScope.launch {
-            repository.getProductById(productId).collect { result ->
-                _product.value = result
-            }
-        }
+    val product: StateFlow<Result<Product>> =
+        productId
+            .filterNotNull()
+            .distinctUntilChanged()
+            .flatMapLatest { id -> repository.getProductById(id) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Result.Loading)
+
+    fun loadProduct(id: String) {
+        productId.value = id
     }
 }

@@ -1,26 +1,27 @@
 package com.mzenskprokat.app.ui.screens
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.mzenskprokat.app.models.ContactInfo
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Phone
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Place
-import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material.icons.outlined.Info
 
 @Composable
 fun ContactsScreen() {
@@ -72,8 +73,9 @@ fun ContactsScreen() {
                 value = contactInfo.phone,
                 description = "Позвоните нам",
                 onClick = {
+                    val digits = contactInfo.phone.replace(Regex("[^0-9+]"), "")
                     val intent = Intent(Intent.ACTION_DIAL).apply {
-                        data = Uri.parse("tel:${contactInfo.phone.replace(Regex("[^0-9+]"), "")}")
+                        data = "tel:$digits".toUri()
                     }
                     context.startActivity(intent)
                 }
@@ -89,7 +91,7 @@ fun ContactsScreen() {
                 description = "Напишите нам",
                 onClick = {
                     val intent = Intent(Intent.ACTION_SENDTO).apply {
-                        data = Uri.parse("mailto:${contactInfo.email}")
+                        data = "mailto:${contactInfo.email}".toUri()
                         putExtra(Intent.EXTRA_SUBJECT, "Запрос информации")
                     }
                     context.startActivity(Intent.createChooser(intent, "Отправить email"))
@@ -111,13 +113,13 @@ fun ContactsScreen() {
         // Сайт
         item {
             ContactCard(
-                icon = Icons.Default.Language,
+                icon = Icons.Filled.Language,
                 title = "Веб-сайт",
                 value = contactInfo.website,
                 description = "Посетите наш сайт",
                 onClick = {
                     val intent = Intent(Intent.ACTION_VIEW).apply {
-                        data = Uri.parse(contactInfo.website)
+                        data = contactInfo.website.toUri()
                     }
                     context.startActivity(intent)
                 }
@@ -131,9 +133,7 @@ fun ContactsScreen() {
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Outlined.AccessTime,
                             contentDescription = null,
@@ -146,7 +146,7 @@ fun ContactsScreen() {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Divider()
+                    HorizontalDivider()
                     WorkingHoursRow("Понедельник - Пятница", "9:00 - 18:00")
                     WorkingHoursRow("Суббота - Воскресенье", "Выходной")
                 }
@@ -164,9 +164,7 @@ fun ContactsScreen() {
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Outlined.Info,
                             contentDescription = null,
@@ -187,9 +185,7 @@ fun ContactsScreen() {
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -204,10 +200,7 @@ fun ContactCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (onClick != null) Modifier.clickable(onClick = onClick)
-                else Modifier
-            )
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -220,9 +213,7 @@ fun ContactCard(
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(16.dp))
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
@@ -239,9 +230,10 @@ fun ContactCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
             if (onClick != null) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -256,10 +248,7 @@ fun WorkingHoursRow(day: String, hours: String) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = day,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Text(text = day, style = MaterialTheme.typography.bodyMedium)
         Text(
             text = hours,
             style = MaterialTheme.typography.bodyMedium,

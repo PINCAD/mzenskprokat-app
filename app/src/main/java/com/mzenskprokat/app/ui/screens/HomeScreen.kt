@@ -1,413 +1,371 @@
 package com.mzenskprokat.app.ui.screens
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mzenskprokat.app.R
-import com.mzenskprokat.app.viewmodels.HomeViewModel
-import androidx.compose.foundation.BorderStroke
+import com.mzenskprokat.app.models.Product
+import com.mzenskprokat.app.models.Result
+import com.mzenskprokat.app.repository.ProductRepository
 
 @Composable
 fun HomeScreen(
     onNavigateToCatalog: () -> Unit,
     onNavigateToOrder: () -> Unit,
-    viewModel: HomeViewModel = viewModel()
+    onNavigateToProductDetail: (String) -> Unit
 ) {
-    val homeDataState by viewModel.homeData.collectAsState()
-    val listState = rememberLazyListState()
+    val shape = RoundedCornerShape(20.dp)
+
+    // Продукты (для поиска + fallback поиска по названию)
+    val repository = remember { ProductRepository() }
+    val productsState by repository.getAllProducts()
+        .collectAsStateWithLifecycle(initialValue = Result.Loading)
+
+    val products = (productsState as? Result.Success<List<Product>>)?.data.orEmpty()
+
+    // Поиск
+    var query by rememberSaveable { mutableStateOf("") }
+    val suggestions = remember(query, products) {
+        if (query.isBlank()) emptyList()
+        else products
+            .asSequence()
+            .filter { it.name.contains(query.trim(), ignoreCase = true) }
+            .take(6)
+            .toList()
+    }
+
+    fun openProductByName(productTitle: String) {
+        val found = products.firstOrNull { p ->
+            p.name.equals(productTitle, ignoreCase = true) ||
+                    p.name.contains(productTitle, ignoreCase = true) ||
+                    productTitle.contains(p.name, ignoreCase = true)
+        }
+        if (found != null) onNavigateToProductDetail(found.id) else onNavigateToCatalog()
+    }
 
     LazyColumn(
-        state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1C5D9C),
-                        Color(0xFFFFFFFF)
-                    )
-                )
-            ), // <--- Изменение здесь
-        verticalArrangement = Arrangement.spacedBy(0.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Красивый баннер с градиентом
+        // Верхний блок: только Поиск
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)  // Увеличил с 300dp до 320dp
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF1C5D9C),
-                                Color(0xFF2E7BB4),
-                                Color(0xFF4A9FCC)
-                            )
-                        )
-                    )
+            Card(
+                shape = shape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                Column(
+                Column(modifier = Modifier.padding(14.dp)) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Поиск по товарам") },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+                    )
+
+                    if (suggestions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            suggestions.forEach { p ->
+                                SuggestionRow(
+                                    title = p.name,
+                                    subtitle = p.description,
+                                    onClick = {
+                                        query = ""
+                                        onNavigateToProductDetail(p.id)
+                                    }
+                                )
+                            }
+                            TextButton(
+                                onClick = onNavigateToCatalog,
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Открыть весь каталог")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // HERO
+        item {
+            Card(
+                shape = shape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Ваше изображение
                     Surface(
-                        modifier = Modifier.size(100.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color.White.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.size(64.dp)
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Image(
                                 painter = painterResource(id = R.drawable.mtsenk),
-                                contentDescription = "Логотип компании",
-                                modifier = Modifier.size(68.dp),
+                                contentDescription = "Логотип",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(10.dp),
                                 contentScale = ContentScale.Fit
                             )
                         }
                     }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
-                    Text(
-                        text = "Завод прецизионных сплавов",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = "МЦЕНСКПРОКАТ",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        letterSpacing = 3.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.2f)
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Производитель металлопродукции с 1964 года",
-                            fontSize = 12.sp,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            fontWeight = FontWeight.Medium
+                            text = "Мценскпрокат",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Завод прецизионных сплавов • с 1964 года",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AssistChip(
+                                onClick = onNavigateToCatalog,
+                                label = { Text("Каталог") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.List,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                            AssistChip(
+                                onClick = onNavigateToOrder,
+                                label = { Text("Заказать") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ShoppingCart,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Преимущества с иконками
+        // WHY US
+        item { SectionTitle("Почему выбирают нас") }
+
         item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFAFAFA))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Почему выбирают нас",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    AdvantageCompactCard(
-                        icon = Icons.Outlined.Star,
-                        title = "60+ лет опыта",
-                        modifier = Modifier.weight(1f),
-                        gradient = listOf(Color(0xFFFFA726), Color(0xFFFF7043))
-                    )
-                    AdvantageCompactCard(
-                        icon = Icons.Outlined.CheckCircle,
-                        title = "ГОСТ качество",
-                        modifier = Modifier.weight(1f),
-                        gradient = listOf(Color(0xFF66BB6A), Color(0xFF43A047))
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    FeatureCard("60+ лет опыта", Icons.Outlined.Star, Modifier.weight(1f))
+                    FeatureCard("ГОСТ качество", Icons.Outlined.CheckCircle, Modifier.weight(1f))
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    AdvantageCompactCard(
-                        icon = Icons.Outlined.List,
-                        title = "150+ сплавов",
-                        modifier = Modifier.weight(1f),
-                        gradient = listOf(Color(0xFF42A5F5), Color(0xFF1E88E5))
-                    )
-                    AdvantageCompactCard(
-                        icon = Icons.Outlined.ShoppingCart,
-                        title = "Оптовые цены",
-                        modifier = Modifier.weight(1f),
-                        gradient = listOf(Color(0xFFAB47BC), Color(0xFF8E24AA))
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    FeatureCard("150+ сплавов", Icons.AutoMirrored.Outlined.List, Modifier.weight(1f))
+                    FeatureCard("Оптовые цены", Icons.Outlined.ShoppingCart, Modifier.weight(1f))
                 }
             }
         }
 
-        // Категории продукции
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFAFAFA))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Наша продукция",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
+        // PRODUCTS
+        item { SectionTitle("Наша продукция") }
 
-                ModernCategoryCard(
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CategoryRowNoLeftIcon(
                     title = "Прецизионные сплавы",
-                    description = "Высокое электрическое сопротивление",
-                    icon = Icons.Outlined.Settings,
-                    color = Color(0xFF1C5D9C)
+                    subtitle = "Высокое электрическое сопротивление",
+                    onClick = { openProductByName("Прецизионные сплавы") }
                 )
-
-                ModernCategoryCard(
+                CategoryRowNoLeftIcon(
                     title = "Магнитно-мягкие сплавы",
-                    description = "Высокая магнитная проницаемость",
-                    icon = Icons.Outlined.Settings,
-                    color = Color(0xFF2E7BB4)
+                    subtitle = "Высокая магнитная проницаемость",
+                    onClick = { openProductByName("Магнитно-мягкие сплавы") }
                 )
-
-                ModernCategoryCard(
+                CategoryRowNoLeftIcon(
                     title = "Проволока нихром",
-                    description = "Диаметры от 0,1 до 10,0 мм",
-                    icon = Icons.Outlined.Settings,
-                    color = Color(0xFF455A64)
+                    subtitle = "Диаметр 0,1–10,0 мм",
+                    onClick = { openProductByName("Проволока нихром") }
                 )
-
-                ModernCategoryCard(
+                CategoryRowNoLeftIcon(
                     title = "Специальные стали",
-                    description = "Жаростойкие и коррозионностойкие",
-                    icon = Icons.Outlined.Settings,
-                    color = Color(0xFF388E3C)
+                    subtitle = "Жаростойкие и коррозионностойкие",
+                    onClick = { openProductByName("Специальные стали") }
                 )
             }
         }
 
-        // Кнопки действий
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFAFAFA))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(
-                    onClick = onNavigateToCatalog,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1C5D9C)
-                    )
-                ) {
-                    Icon(
-                        Icons.Outlined.List,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        "Открыть каталог",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = onNavigateToOrder,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF1C5D9C)
-                    ),
-                    border = BorderStroke(2.dp, Color(0xFF1C5D9C))
-                ) {
-                    Icon(
-                        Icons.Outlined.ShoppingCart,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        "Оформить заказ",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 }
 
 @Composable
-fun AdvantageCompactCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun SectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun FeatureCard(
     title: String,
-    modifier: Modifier = Modifier,
-    gradient: List<Color>
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.height(100.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        modifier = modifier.height(92.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = gradient.map { it.copy(alpha = 0.1f) }
-                    )
-                )
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(44.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = gradient[0].copy(alpha = 0.15f)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .padding(8.dp),
-                        tint = gradient[0]
-                    )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    color = gradient[0]
-                )
             }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
-fun ModernCategoryCard(
+private fun CategoryRowNoLeftIcon(
     title: String,
-    description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color
+    subtitle: String,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.08f)
-        )
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                color = color.copy(alpha = 0.15f)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(12.dp)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = color
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = description,
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Icon(
-                imageVector = Icons.Outlined.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
-                tint = color
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null
             )
         }
     }

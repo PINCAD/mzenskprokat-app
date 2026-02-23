@@ -4,9 +4,11 @@ import android.util.Log
 import com.mzenskprokat.app.BuildConfig
 import com.mzenskprokat.app.api.TelegramApiService
 import com.mzenskprokat.app.api.TelegramMessage
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 class TelegramNotificationService {
 
@@ -19,8 +21,24 @@ class TelegramNotificationService {
     private val chatId: String = BuildConfig.TELEGRAM_CHAT_ID
 
     private val telegramApi: TelegramApiService by lazy {
+        val okHttp = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .apply {
+                if (BuildConfig.DEBUG) {
+                    // Логируем только в debug и без BODY (безопаснее/быстрее)
+                    val logging = HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.BASIC
+                    }
+                    addInterceptor(logging)
+                }
+            }
+            .build()
+
         Retrofit.Builder()
             .baseUrl(TELEGRAM_API_URL)
+            .client(okHttp)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TelegramApiService::class.java)
@@ -34,43 +52,32 @@ class TelegramNotificationService {
                 )
             }
 
-            // ✅ Собираем безопасный URL: ":" в токене будет автоматически заэнкоден в %3A
-            val fullUrl = TELEGRAM_API_URL
-                .toHttpUrl()
-                .newBuilder()
-                .addPathSegment("bot$botToken")
-                .addPathSegment("sendMessage")
-                .build()
-                .toString()
+            // ВАЖНО: токен должен идти в URL "как есть", без %3A.
+            val url = "${TELEGRAM_API_URL}bot$botToken/sendMessage"
 
             val response = telegramApi.sendMessage(
-                url = fullUrl,
+                url = url,
                 message = TelegramMessage(
-                    chat_id = chatId,
+                    chatId = chatId,
                     text = text,
-                    parse_mode = null
+                    parseMode = null
                 )
             )
 
-            Log.e(TAG, "Request URL: ${response.raw().request.url}")
-            Log.e(TAG, "BOT_TOKEN length: ${botToken.length}, CHAT_ID=$chatId")
-
             if (!response.isSuccessful) {
                 val err = response.errorBody()?.string()
-                Log.e(TAG, "HTTP ${response.code()} errorBody=$err body=${response.body()}")
+                Log.e(TAG, "Telegram HTTP ${response.code()} errorBody=$err")
                 Result.failure(RuntimeException("Telegram HTTP ${response.code()}"))
             } else {
                 val body = response.body()
                 if (body?.ok == true) {
-                    Log.d(TAG, "Telegram: OK")
                     Result.success(Unit)
                 } else {
-                    Log.e(TAG, "Telegram ok=false description=${body?.description}")
                     Result.failure(RuntimeException("Telegram ok=false: ${body?.description}"))
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception", e)
+            Log.e(TAG, "Telegram exception", e)
             Result.failure(e)
         }
     }

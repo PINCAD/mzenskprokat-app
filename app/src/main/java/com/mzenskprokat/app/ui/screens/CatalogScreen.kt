@@ -6,68 +6,81 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mzenskprokat.app.models.*
+import com.mzenskprokat.app.models.Product
+import com.mzenskprokat.app.models.ProductCategory
+import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.viewmodels.ProductCatalogViewModel
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Clear
-import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.KeyboardArrowRight
-
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material3.Icon
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     onProductClick: (String) -> Unit,
     viewModel: ProductCatalogViewModel = viewModel()
 ) {
-    val productsState by viewModel.products.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
-    var showSearchBar by remember { mutableStateOf(false) }
+    val productsState by viewModel.products.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.selectedCategoryState.collectAsStateWithLifecycle()
+    val query by viewModel.searchQueryState.collectAsStateWithLifecycle()
+
+    var showSearchBar by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Поисковая строка
+
+        // Верхняя панель с переключателем поиска
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Каталог",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { showSearchBar = !showSearchBar }) {
+                Icon(Icons.Outlined.Search, contentDescription = "Поиск")
+            }
+        }
+
         if (showSearchBar) {
             SearchBar(
-                query = searchQuery,
-                onQueryChange = {
-                    searchQuery = it
-                    if (it.isNotEmpty()) {
-                        viewModel.searchProducts(it)
-                    } else {
-                        viewModel.loadAllProducts()
-                    }
-                },
-                onSearch = { viewModel.searchProducts(searchQuery) },
+                query = query,
+                onQueryChange = { viewModel.setSearchQuery(it) },
+                onSearch = { /* уже фильтруется по query */ },
                 active = false,
                 onActiveChange = {},
-                placeholder = { Text("Поиск по сплавам...") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = "Search") },
+                placeholder = { Text("Поиск по продукции / сплавам...") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            searchQuery = ""
-                            viewModel.loadAllProducts()
-                        }) {
-                            Icon(Icons.Outlined.Clear, contentDescription = "Clear")
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(Icons.Outlined.Clear, contentDescription = "Очистить")
                         }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {}
+            ) { }
         }
 
-        // Фильтры по категориям
+        // Категории
         LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
@@ -75,15 +88,14 @@ fun CatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp)
         ) {
-            item {
+            item(key = "all") {
                 FilterChip(
-                    selected = selectedCategory == null,
+                    selected = selectedCategory == null && query.isEmpty(),
                     onClick = { viewModel.loadAllProducts() },
                     label = { Text("Все") }
                 )
             }
-
-            items(ProductCategory.values()) { category ->
+            items(ProductCategory.entries, key = { it.name }) { category ->
                 FilterChip(
                     selected = selectedCategory == category,
                     onClick = { viewModel.filterByCategory(category) },
@@ -98,29 +110,20 @@ fun CatalogScreen(
             }
         }
 
-        Divider()
+        HorizontalDivider()
 
-        // Список продукции
         when (val state = productsState) {
             is Result.Loading, is Result.Idle -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
 
             is Result.Success -> {
-                if (state.data.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Продукция не найдена",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
+                val data = state.data
+                if (data.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Продукция не найдена", style = MaterialTheme.typography.bodyLarge)
                     }
                 } else {
                     LazyColumn(
@@ -128,21 +131,15 @@ fun CatalogScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(state.data) { product ->
-                            ProductCard(
-                                product = product,
-                                onClick = { onProductClick(product.id) }
-                            )
+                        items(data, key = { it.id }) { product ->
+                            ProductCard(product = product, onClick = { onProductClick(product.id) })
                         }
                     }
                 }
             }
 
             is Result.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -175,10 +172,7 @@ fun ProductCard(
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Название продукта
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = product.name,
                 style = MaterialTheme.typography.titleMedium,
@@ -186,10 +180,8 @@ fun ProductCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Описание
             Text(
                 text = product.description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -197,26 +189,16 @@ fun ProductCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Категория
             SuggestionChip(
                 onClick = {},
-                label = {
-                    Text(
-                        text = product.category.shortName,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+                label = { Text(product.category.shortName, style = MaterialTheme.typography.labelSmall) }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Количество сплавов
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Outlined.Info,
                     contentDescription = null,
@@ -229,11 +211,9 @@ fun ProductCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-
                 Spacer(modifier = Modifier.weight(1f))
-
                 Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = "Подробнее",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -241,4 +221,3 @@ fun ProductCard(
         }
     }
 }
-

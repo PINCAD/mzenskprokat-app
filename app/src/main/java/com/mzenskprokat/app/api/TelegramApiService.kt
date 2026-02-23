@@ -1,5 +1,6 @@
 package com.mzenskprokat.app.api
 
+import com.google.gson.annotations.SerializedName
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
@@ -15,9 +16,14 @@ interface TelegramApiService {
 }
 
 data class TelegramMessage(
-    val chat_id: String,
+    @SerializedName("chat_id")
+    val chatId: String,
+
+    @SerializedName("text")
     val text: String,
-    val parse_mode: String? = null
+
+    @SerializedName("parse_mode")
+    val parseMode: String? = null
 )
 
 data class TelegramResponse(
