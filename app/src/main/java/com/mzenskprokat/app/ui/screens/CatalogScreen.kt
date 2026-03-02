@@ -191,13 +191,6 @@ fun ProductCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            SuggestionChip(
-                onClick = {},
-                label = { Text(product.category.shortName, style = MaterialTheme.typography.labelSmall) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Outlined.Info,

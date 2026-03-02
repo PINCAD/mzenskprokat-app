@@ -24,7 +24,8 @@ data class Product(
     val specifications: List<String>,
     val alloys: List<String>,
     val imageUrl: String? = null,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val stockQty: Int? = null
 )
 
 // Контактная информация

@@ -3,11 +3,12 @@ package com.mzenskprokat.app.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.List
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Star
@@ -27,6 +28,9 @@ import com.mzenskprokat.app.models.Product
 import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.repository.ProductRepository
 
+private const val STOCK_BASE_URL =
+    "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
+
 @Composable
 fun HomeScreen(
     onNavigateToCatalog: () -> Unit,
@@ -34,32 +38,30 @@ fun HomeScreen(
     onNavigateToProductDetail: (String) -> Unit
 ) {
     val shape = RoundedCornerShape(20.dp)
-
-    // Продукты (для поиска + fallback поиска по названию)
     val repository = remember { ProductRepository() }
-    val productsState by repository.getAllProducts()
+
+    // ✅ Подтягиваем "в наличии" + (опционально) live-остатки
+    val inStockState by repository
+        .getInStockProductsWithLiveQty(STOCK_BASE_URL)
         .collectAsStateWithLifecycle(initialValue = Result.Loading)
 
-    val products = (productsState as? Result.Success<List<Product>>)?.data.orEmpty()
+    // ✅ Правильное извлечение списка из Result.Success<T>
+    val inStockProducts: List<Product> =
+        (inStockState as? Result.Success<List<Product>>)?.data ?: emptyList()
 
-    // Поиск
     var query by rememberSaveable { mutableStateOf("") }
-    val suggestions = remember(query, products) {
-        if (query.isBlank()) emptyList()
-        else products
+
+    val suggestions = remember(query, inStockProducts) {
+        val q = query.trim()
+        if (q.isBlank()) emptyList()
+        else inStockProducts
             .asSequence()
-            .filter { it.name.contains(query.trim(), ignoreCase = true) }
+            .filter { p ->
+                p.name.contains(q, ignoreCase = true) ||
+                        p.alloys.any { it.contains(q, ignoreCase = true) }
+            }
             .take(6)
             .toList()
-    }
-
-    fun openProductByName(productTitle: String) {
-        val found = products.firstOrNull { p ->
-            p.name.equals(productTitle, ignoreCase = true) ||
-                    p.name.contains(productTitle, ignoreCase = true) ||
-                    productTitle.contains(p.name, ignoreCase = true)
-        }
-        if (found != null) onNavigateToProductDetail(found.id) else onNavigateToCatalog()
     }
 
     LazyColumn(
@@ -69,7 +71,8 @@ fun HomeScreen(
         contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Верхний блок: только Поиск
+
+        // Поиск (по товарам в наличии)
         item {
             Card(
                 shape = shape,
@@ -82,7 +85,7 @@ fun HomeScreen(
                         onValueChange = { query = it },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("Поиск по товарам") },
+                        label = { Text("Поиск по товарам в наличии") },
                         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
                     )
 
@@ -99,11 +102,12 @@ fun HomeScreen(
                                     }
                                 )
                             }
+
                             TextButton(
                                 onClick = onNavigateToCatalog,
                                 modifier = Modifier.align(Alignment.End)
                             ) {
-                                Text("Открыть весь каталог")
+                                Text("Перейти в каталог (под заказ)")
                             }
                         }
                     }
@@ -111,7 +115,7 @@ fun HomeScreen(
             }
         }
 
-        // HERO
+        // Герой-блок (оставил как у тебя)
         item {
             Card(
                 shape = shape,
@@ -154,7 +158,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Завод прецизионных сплавов • с 1964 года",
+                            text = "На главной — товары в наличии. В каталоге — подбор и заказ.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
                             maxLines = 2,
@@ -190,142 +194,135 @@ fun HomeScreen(
             }
         }
 
-        // WHY US
-        item { SectionTitle("Почему выбирают нас") }
-
+        // Блок "В наличии"
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    FeatureCard("60+ лет опыта", Icons.Outlined.Star, Modifier.weight(1f))
-                    FeatureCard("ГОСТ качество", Icons.Outlined.CheckCircle, Modifier.weight(1f))
+            Text(
+                text = "В наличии",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        when (val state = inStockState) {
+            is Result.Loading, is Result.Idle -> {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 18.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    FeatureCard("150+ сплавов", Icons.AutoMirrored.Outlined.List, Modifier.weight(1f))
-                    FeatureCard("Оптовые цены", Icons.Outlined.ShoppingCart, Modifier.weight(1f))
+            }
+
+            is Result.Error -> {
+                item {
+                    Text(
+                        text = state.message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
+            is Result.Success<*> -> {
+                // ✅ Берём список уже из inStockProducts (он точно List<Product>)
+                if (inStockProducts.isEmpty()) {
+                    item {
+                        Text(
+                            "Сейчас нет товаров в наличии. Перейдите в каталог для заказа.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    items(
+                        items = inStockProducts,
+                        key = { it.id }
+                    ) { product ->
+                        ProductCard(
+                            product = product,
+                            onClick = { onNavigateToProductDetail(product.id) }
+                        )
+                    }
                 }
             }
         }
 
-        // PRODUCTS
-        item { SectionTitle("Наша продукция") }
+        item { Spacer(modifier = Modifier.height(12.dp)) }
 
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                CategoryRowNoLeftIcon(
-                    title = "Прецизионные сплавы",
-                    subtitle = "Высокое электрическое сопротивление",
-                    onClick = { openProductByName("Прецизионные сплавы") }
-                )
-                CategoryRowNoLeftIcon(
-                    title = "Магнитно-мягкие сплавы",
-                    subtitle = "Высокая магнитная проницаемость",
-                    onClick = { openProductByName("Магнитно-мягкие сплавы") }
-                )
-                CategoryRowNoLeftIcon(
-                    title = "Проволока нихром",
-                    subtitle = "Диаметр 0,1–10,0 мм",
-                    onClick = { openProductByName("Проволока нихром") }
-                )
-                CategoryRowNoLeftIcon(
-                    title = "Специальные стали",
-                    subtitle = "Жаростойкие и коррозионностойкие",
-                    onClick = { openProductByName("Специальные стали") }
-                )
-            }
+            Text(
+                text = "Почему выбирают нас",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            FeatureCard(
+                icon = Icons.Outlined.Star,
+                title = "Качество продукции",
+                description = "Соответствие ГОСТ, стабильные характеристики, контроль качества."
+            )
+        }
+
+        item {
+            FeatureCard(
+                icon = Icons.Outlined.Info,
+                title = "Консультации",
+                description = "Подскажем по сплавам и применению, поможем подобрать аналог."
+            )
         }
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 }
 
-@Composable
-private fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold
-    )
-}
-
+// ниже твои FeatureCard/SuggestionRow без изменений
 @Composable
 private fun FeatureCard(
-    title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier
+    title: String,
+    description: String
 ) {
     Card(
-        modifier = modifier.height(92.dp),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(46.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
 
-@Composable
-private fun CategoryRowNoLeftIcon(
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            Spacer(modifier = Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
+                    text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

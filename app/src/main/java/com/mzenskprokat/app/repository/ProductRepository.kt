@@ -8,18 +8,46 @@ import kotlinx.coroutines.flow.flowOn
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 class ProductRepository(
     private val telegramService: TelegramNotificationService = TelegramNotificationService()
 ) {
 
-    // Статические данные продукции — создаются один раз
+    // Каталог (как был) — статические данные продукции — создаются один раз
     private val products: List<Product> by lazy { buildProducts() }
+
+    // ✅ Товары "в наличии" — отдельный набор (для Главной)
+    private val inStockProducts: List<Product> by lazy { buildInStockProducts() }
 
     fun getAllProducts(): Flow<Result<List<Product>>> = flow {
         emit(Result.Loading)
         emit(Result.Success(products))
     }.flowOn(Dispatchers.Default)
+
+    // ✅ Отдельная выдача "в наличии" для Главной
+    fun getInStockProducts(): Flow<Result<List<Product>>> = flow {
+        emit(Result.Loading)
+        emit(Result.Success(inStockProducts))
+    }.flowOn(Dispatchers.Default)
+
+    fun getInStockProductsWithLiveQty(stockBaseUrl: String): Flow<Result<List<Product>>> = flow {
+        emit(Result.Success(inStockProducts)) // сразу список, без остатков
+
+        val merged: List<Product> = try {
+            val service = StockService(stockBaseUrl)
+            val stockMap = withTimeout(7000) { service.loadStock() }
+
+            inStockProducts.map { p ->
+                p.copy(stockQty = stockMap[p.id])
+            }
+        } catch (_: Exception) {
+            inStockProducts
+        }
+
+        emit(Result.Success(merged))
+    }.flowOn(Dispatchers.IO)
 
     fun getProductsByCategory(category: ProductCategory): Flow<Result<List<Product>>> = flow {
         emit(Result.Loading)
@@ -29,9 +57,37 @@ class ProductRepository(
 
     fun getProductById(id: String): Flow<Result<Product>> = flow {
         emit(Result.Loading)
-        val product = products.find { it.id == id }
-        if (product != null) emit(Result.Success(product)) else emit(Result.Error("Продукт не найден"))
-    }.flowOn(Dispatchers.Default)
+
+        // 1) Ищем сначала в складских, потом в обычных
+        val baseProduct = inStockProducts.find { it.id == id }
+            ?: products.find { it.id == id }
+
+        if (baseProduct == null) {
+            emit(Result.Error("Продукт не найден"))
+            return@flow
+        }
+
+        // 2) Для складских товаров подтягиваем остатки из Google Sheets
+        val isInStockProduct = inStockProducts.any { it.id == id }
+
+        if (!isInStockProduct) {
+            emit(Result.Success(baseProduct))
+            return@flow
+        }
+
+        val stockMap = try {
+            // ВАЖНО: baseUrl без /exec, со слэшем
+            val service = StockService(
+                "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
+            )
+            withTimeout(7000) { service.loadStock() }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        val merged = baseProduct.copy(stockQty = stockMap[id])
+        emit(Result.Success(merged))
+    }.flowOn(Dispatchers.IO)
 
     fun searchProducts(query: String): Flow<Result<List<Product>>> = flow {
         emit(Result.Loading)
@@ -76,6 +132,110 @@ class ProductRepository(
         emit(Result.Success(HomeData()))
     }.flowOn(Dispatchers.Default)
 
+    // ✅ 8 товаров "в наличии" (более прикладные/часто спрашиваемые позиции под твой ассортимент сплавов)
+    // Это не прокат "арматура/швеллер", а позиции в формате твоей модели: группа + список марок.
+    // ✅ 8 "штучных" складских позиций (поштучная продажа)
+    private fun buildInStockProducts(): List<Product> {
+        return listOf(
+            Product(
+                id = "stock_piece_1",
+                name = "Нихромовая проволока Х20Н80 — катушка 1 кг",
+                category = ProductCategory.NICHROME_WIRE,
+                description = "Готовая катушка для нагревательных элементов. Продажа поштучно (1 катушка).",
+                specifications = listOf(
+                    "Фасовка: 1 кг",
+                    "Формат: катушка",
+                    "Применение: нагреватели, резистивные элементы"
+                ),
+                alloys = listOf("Х20Н80")
+            ),
+            Product(
+                id = "stock_piece_2",
+                name = "Нихромовая проволока Х15Н60 — катушка 1 кг",
+                category = ProductCategory.NICHROME_WIRE,
+                description = "Катушка нихрома для нагревательных спиралей. Продажа поштучно.",
+                specifications = listOf(
+                    "Фасовка: 1 кг",
+                    "Формат: катушка",
+                    "Ходовые диаметры на складе"
+                ),
+                alloys = listOf("Х15Н60")
+            ),
+            Product(
+                id = "stock_piece_3",
+                name = "Лента нихромовая Х20Н80 — бухта 5 м",
+                category = ProductCategory.PRECISION_HIGH_RESISTANCE,
+                description = "Нихромовая лента для нагревательных узлов. Продажа поштучно (бухта 5 м).",
+                specifications = listOf(
+                    "Фасовка: 5 м",
+                    "Формат: бухта",
+                    "Для нагревательных элементов и резисторов"
+                ),
+                alloys = listOf("Х20Н80")
+            ),
+            Product(
+                id = "stock_piece_4",
+                name = "Проволока 36Н (инвар) — отрезок 1 м",
+                category = ProductCategory.TEMPERATURE_COEFFICIENT,
+                description = "Инвар 36Н с низким ТКЛР. Продажа поштучно (отрезок 1 м).",
+                specifications = listOf(
+                    "Фасовка: 1 м",
+                    "Низкий ТКЛР",
+                    "Для точной механики и приборостроения"
+                ),
+                alloys = listOf("36Н")
+            ),
+            Product(
+                id = "stock_piece_5",
+                name = "Пруток 29НК — отрезок 0,5 м",
+                category = ProductCategory.TEMPERATURE_COEFFICIENT,
+                description = "Сплав 29НК для согласования расширения. Продажа поштучно (0,5 м).",
+                specifications = listOf(
+                    "Фасовка: 0,5 м",
+                    "Формат: пруток",
+                    "Для стеклометаллических узлов"
+                ),
+                alloys = listOf("29НК")
+            ),
+            Product(
+                id = "stock_piece_6",
+                name = "Лист 20Х25Н18 — 300×300 мм (3 мм)",
+                category = ProductCategory.HEAT_RESISTANT,
+                description = "Жаростойкая сталь. Продажа поштучно (лист-нарезка).",
+                specifications = listOf(
+                    "Размер: 300×300 мм",
+                    "Толщина: 3 мм",
+                    "Для печей/экранов/крепежных элементов"
+                ),
+                alloys = listOf("20Х25Н18")
+            ),
+            Product(
+                id = "stock_piece_7",
+                name = "Заготовка магнитопровода — 79НМ (комплект)",
+                category = ProductCategory.MAGNETIC_SOFT,
+                description = "Готовый комплект заготовок из магнитно-мягкого сплава. Продажа поштучно.",
+                specifications = listOf(
+                    "Формат: комплект",
+                    "Для трансформаторов/датчиков",
+                    "Магнитно-мягкий материал"
+                ),
+                alloys = listOf("79НМ")
+            ),
+            Product(
+                id = "stock_piece_8",
+                name = "Проволока 40Х — отрезок 2 м",
+                category = ProductCategory.ELASTIC_ELEMENTS,
+                description = "Сталь/сплав для упругих элементов. Продажа поштучно (отрезок 2 м).",
+                specifications = listOf(
+                    "Фасовка: 2 м",
+                    "Для пружин/упругих деталей (по техпроцессу)",
+                    "Отгрузка со склада"
+                ),
+                alloys = listOf("40КХНМ")
+            )
+        )
+    }
+
     private fun buildProducts(): List<Product> {
         return listOf(
             Product(
@@ -100,7 +260,7 @@ class ProductRepository(
                     "Малая коэрцитивная сила",
                     "Низкие потери на перемагничивание"
                 ),
-                alloys = listOf("16Х", "34НКМ", "35НКХСП", "36КНМ", "40Н", "40НКМ", "45Н", "47НК", "47НКХ", "49К2Ф", "49К2ФА", "50Н", "50НХС", "50ХНС", "64Н", "68НМ", "76НХД", "77НМД", "79Н3М", "79НМ", "80Н2М", "80НХС", "81НМА", "83НФ", "83НФ-Ш")
+                alloys = listOf("16Х", "34НКМ", "35НКХСП", "36КНМ", "40Н", "40НКМ", "45Н", "47НК", "47НКХ", "47НКХ", "49К2Ф", "49К2ФА", "50Н", "50НХС", "50ХНС", "64Н", "68НМ", "76НХД", "77НМД", "79Н3М", "79НМ", "80Н2М", "80НХС", "81НМА", "83НФ", "83НФ-Ш")
             ),
             Product(
                 id = "3",
