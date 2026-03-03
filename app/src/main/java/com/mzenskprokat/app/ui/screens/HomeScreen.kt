@@ -27,6 +27,10 @@ import com.mzenskprokat.app.R
 import com.mzenskprokat.app.models.Product
 import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.repository.ProductRepository
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.ExperimentalFoundationApi
 
 private const val STOCK_BASE_URL =
     "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
@@ -115,83 +119,16 @@ fun HomeScreen(
             }
         }
 
-        // Герой-блок (оставил как у тебя)
+        // Рекламный блок (3 картинки, автоперелистывание 10 сек)
         item {
-            Card(
-                shape = shape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp,
-                        shadowElevation = 0.dp,
-                        modifier = Modifier.size(64.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Image(
-                                painter = painterResource(id = R.drawable.mtsenk),
-                                contentDescription = "Логотип",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(10.dp),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Мценскпрокат",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "На главной — товары в наличии. В каталоге — подбор и заказ.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AssistChip(
-                                onClick = onNavigateToCatalog,
-                                label = { Text("Каталог") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.List,
-                                        contentDescription = null
-                                    )
-                                }
-                            )
-                            AssistChip(
-                                onClick = onNavigateToOrder,
-                                label = { Text("Заказать") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.ShoppingCart,
-                                        contentDescription = null
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            AdBannerSlider(
+                imageRes = listOf(
+                    R.drawable.banner1,
+                    R.drawable.banner2,
+                    R.drawable.banner3
+                ),
+                intervalMs = 10_000L
+            )
         }
 
         // Блок "В наличии"
@@ -249,34 +186,6 @@ fun HomeScreen(
                 }
             }
         }
-
-        item { Spacer(modifier = Modifier.height(12.dp)) }
-
-        item {
-            Text(
-                text = "Почему выбирают нас",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        item {
-            FeatureCard(
-                icon = Icons.Outlined.Star,
-                title = "Качество продукции",
-                description = "Соответствие ГОСТ, стабильные характеристики, контроль качества."
-            )
-        }
-
-        item {
-            FeatureCard(
-                icon = Icons.Outlined.Info,
-                title = "Консультации",
-                description = "Подскажем по сплавам и применению, поможем подобрать аналог."
-            )
-        }
-
-        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 }
 
@@ -363,6 +272,44 @@ private fun SuggestionRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null
+            )
+        }
+    }
+}
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun AdBannerSlider(
+    imageRes: List<Int>,
+    intervalMs: Long = 10_000L
+) {
+    val shape = RoundedCornerShape(20.dp)
+    val pagerState = rememberPagerState(pageCount = { imageRes.size })
+
+    LaunchedEffect(imageRes) {
+        while (true) {
+            delay(intervalMs)
+            val next = (pagerState.currentPage + 1) % imageRes.size
+            pagerState.animateScrollToPage(next)
+        }
+    }
+
+    Card(
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+        ) { page ->
+            Image(
+                painter = painterResource(id = imageRes[page]),
+                contentDescription = "Реклама ${page + 1}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
