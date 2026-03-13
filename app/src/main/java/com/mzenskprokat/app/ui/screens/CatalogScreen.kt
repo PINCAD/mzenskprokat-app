@@ -26,6 +26,11 @@ import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.viewmodels.ProductCatalogViewModel
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.mzenskprokat.app.utils.pluralAlloys
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import com.mzenskprokat.app.ui.components.AppSearchField
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
@@ -33,113 +38,79 @@ fun CatalogScreen(
     viewModel: ProductCatalogViewModel = viewModel()
 ) {
     val productsState by viewModel.products.collectAsStateWithLifecycle()
-    val selectedCategory by viewModel.selectedCategoryState.collectAsStateWithLifecycle()
     val query by viewModel.searchQueryState.collectAsStateWithLifecycle()
 
-    var showSearchBar by rememberSaveable { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
 
-    Column(modifier = Modifier.fillMaxSize()) {
-
-        // Верхняя панель с переключателем поиска
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(top = 16.dp)
         ) {
-            Text(
-                text = "Каталог",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = { showSearchBar = !showSearchBar }) {
-                Icon(Icons.Outlined.Search, contentDescription = "Поиск")
-            }
-        }
-
-        if (showSearchBar) {
-            SearchBar(
+            AppSearchField(
                 query = query,
                 onQueryChange = { viewModel.setSearchQuery(it) },
-                onSearch = { /* уже фильтруется по query */ },
-                active = false,
-                onActiveChange = {},
-                placeholder = { Text("Поиск по продукции / сплавам...") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Outlined.Clear, contentDescription = "Очистить")
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) { }
+                placeholderText = "Поиск по продукции и сплавам"
+            )
         }
-
-        // Категории
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp)
-        ) {
-            item(key = "all") {
-                FilterChip(
-                    selected = selectedCategory == null && query.isEmpty(),
-                    onClick = { viewModel.loadAllProducts() },
-                    label = { Text("Все") }
-                )
-            }
-            items(ProductCategory.entries, key = { it.name }) { category ->
-                FilterChip(
-                    selected = selectedCategory == category,
-                    onClick = { viewModel.filterByCategory(category) },
-                    label = {
-                        Text(
-                            text = category.shortName,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                )
-            }
-        }
-
-        HorizontalDivider()
 
         when (val state = productsState) {
             is Result.Loading, is Result.Idle -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator()
                 }
             }
 
             is Result.Success -> {
                 val data = state.data
+
                 if (data.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Продукция не найдена", style = MaterialTheme.typography.bodyLarge)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Продукция не найдена",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(data, key = { it.id }) { product ->
-                            ProductCard(product = product, onClick = { onProductClick(product.id) })
+                        items(
+                            items = data,
+                            key = { it.id }
+                        ) { product ->
+                            ProductCard(
+                                product = product,
+                                onClick = { onProductClick(product.id) }
+                            )
                         }
                     }
                 }
             }
 
             is Result.Error -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -170,7 +141,9 @@ fun ProductCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -180,6 +153,7 @@ fun ProductCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
@@ -189,6 +163,37 @@ fun ProductCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            product.stockQty?.let { qty ->
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val inStock = qty > 0
+                val containerColor = if (inStock) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.errorContainer
+                }
+
+                val contentColor = if (inStock) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onErrorContainer
+                }
+
+                Surface(
+                    color = containerColor,
+                    contentColor = contentColor,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (inStock) "В наличии: $qty шт." else "Нет в наличии",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -200,7 +205,7 @@ fun ProductCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "${product.alloys.size} сплавов",
+                    text = pluralAlloys(product.alloys.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )

@@ -1,101 +1,104 @@
 package com.mzenskprokat.app.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.List
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mzenskprokat.app.R
-import com.mzenskprokat.app.models.Product
-import com.mzenskprokat.app.models.Result
-import com.mzenskprokat.app.repository.ProductRepository
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import kotlinx.coroutines.delay
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.ExperimentalFoundationApi
+import com.mzenskprokat.app.R
+import com.mzenskprokat.app.ui.components.AppSearchField
+import com.mzenskprokat.app.viewmodels.HomeViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
-private const val STOCK_BASE_URL =
-    "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
-
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun HomeScreen(
     onNavigateToCatalog: () -> Unit,
     onNavigateToOrder: () -> Unit,
-    onNavigateToProductDetail: (String) -> Unit
+    onNavigateToProductDetail: (String) -> Unit,
+    viewModel: HomeViewModel = viewModel()
 ) {
-    val shape = RoundedCornerShape(20.dp)
-    val repository = remember { ProductRepository() }
+    val inStockProducts by viewModel.inStockProducts.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
-    // ✅ Подтягиваем "в наличии" + (опционально) live-остатки
-    val inStockState by repository
-        .getInStockProductsWithLiveQty(STOCK_BASE_URL)
-        .collectAsStateWithLifecycle(initialValue = Result.Loading)
 
-    // ✅ Правильное извлечение списка из Result.Success<T>
-    val inStockProducts: List<Product> =
-        (inStockState as? Result.Success<List<Product>>)?.data ?: emptyList()
+    val scope = rememberCoroutineScope()
+
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = { viewModel.refreshStock() }
+    )
 
     var query by rememberSaveable { mutableStateOf("") }
 
     val suggestions = remember(query, inStockProducts) {
         val q = query.trim()
-        if (q.isBlank()) emptyList()
-        else inStockProducts
-            .asSequence()
-            .filter { p ->
-                p.name.contains(q, ignoreCase = true) ||
-                        p.alloys.any { it.contains(q, ignoreCase = true) }
-            }
-            .take(6)
-            .toList()
+        if (q.isBlank()) {
+            emptyList()
+        } else {
+            inStockProducts
+                .asSequence()
+                .filter { p ->
+                    p.name.contains(q, ignoreCase = true) ||
+                            p.alloys.any { it.contains(q, ignoreCase = true) }
+                }
+                .take(6)
+                .toList()
+        }
     }
 
-    LazyColumn(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .pullRefresh(pullRefreshState)
     ) {
-
-        // Поиск (по товарам в наличии)
-        item {
-            Card(
-                shape = shape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Поиск по товарам в наличии") },
-                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Column {
+                    AppSearchField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        placeholderText = "Поиск по товарам в наличии"
                     )
 
                     if (suggestions.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             suggestions.forEach { p ->
                                 SuggestionRow(
                                     title = p.name,
@@ -117,67 +120,43 @@ fun HomeScreen(
                     }
                 }
             }
-        }
 
-        // Рекламный блок (3 картинки, автоперелистывание 10 сек)
-        item {
-            AdBannerSlider(
-                imageRes = listOf(
-                    R.drawable.banner1,
-                    R.drawable.banner2,
-                    R.drawable.banner3
-                ),
-                intervalMs = 10_000L
-            )
-        }
-
-        // Блок "В наличии"
-        item {
-            Text(
-                text = "В наличии",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        when (val state = inStockState) {
-            is Result.Loading, is Result.Idle -> {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 18.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-            }
-
-            is Result.Error -> {
-                item {
-                    Text(
-                        text = state.message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
+            item {
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    AdBannerSlider(
+                        imageRes = listOf(
+                            R.drawable.banner1,
+                            R.drawable.banner2,
+                            R.drawable.banner3
+                        ),
+                        intervalMs = 10_000L
                     )
                 }
             }
 
-            is Result.Success<*> -> {
-                // ✅ Берём список уже из inStockProducts (он точно List<Product>)
-                if (inStockProducts.isEmpty()) {
-                    item {
-                        Text(
-                            "Сейчас нет товаров в наличии. Перейдите в каталог для заказа.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else {
-                    items(
-                        items = inStockProducts,
-                        key = { it.id }
-                    ) { product ->
+            item {
+                Text(
+                    text = "В наличии",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+
+            if (inStockProducts.isEmpty()) {
+                item {
+                    Text(
+                        text = "Сейчас нет товаров в наличии. Перейдите в каталог для заказа.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            } else {
+                items(
+                    items = inStockProducts,
+                    key = { it.id }
+                ) { product ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         ProductCard(
                             product = product,
                             onClick = { onNavigateToProductDetail(product.id) }
@@ -186,10 +165,15 @@ fun HomeScreen(
                 }
             }
         }
+
+        PullRefreshIndicator(
+            refreshing = isRefreshing,
+            state = pullRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
-// ниже твои FeatureCard/SuggestionRow без изменений
 @Composable
 private fun FeatureCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -225,7 +209,7 @@ private fun FeatureCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
@@ -256,19 +240,20 @@ private fun SuggestionRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    title,
+                    text = title,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    subtitle,
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null
@@ -276,6 +261,7 @@ private fun SuggestionRow(
         }
     }
 }
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AdBannerSlider(
@@ -286,6 +272,8 @@ fun AdBannerSlider(
     val pagerState = rememberPagerState(pageCount = { imageRes.size })
 
     LaunchedEffect(imageRes) {
+        if (imageRes.isEmpty()) return@LaunchedEffect
+
         while (true) {
             delay(intervalMs)
             val next = (pagerState.currentPage + 1) % imageRes.size
@@ -297,19 +285,24 @@ fun AdBannerSlider(
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
     ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp)
+                .clip(shape)
         ) { page ->
             Image(
                 painter = painterResource(id = imageRes[page]),
                 contentDescription = "Реклама ${page + 1}",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(shape)
             )
         }
     }

@@ -3,9 +3,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:label="MzenskProkat"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Мценскпрокат"
+        android:icon="@mipmap/ic_launcher_mtsensk"
+        android:roundIcon="@mipmap/ic_launcher_mtsensk_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MzenskProkat">
 

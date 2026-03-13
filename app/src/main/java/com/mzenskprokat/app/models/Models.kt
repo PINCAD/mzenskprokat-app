@@ -44,7 +44,8 @@ data class OrderRequest(
     val productName: String,
     val quantity: String,
     val comment: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long,
+    val attachment: OrderAttachment? = null
 )
 
 // Результат операции (для UI/данных)

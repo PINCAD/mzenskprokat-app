@@ -10,16 +10,66 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class ProductRepository(
+
     private val telegramService: TelegramNotificationService = TelegramNotificationService()
 ) {
+
+    companion object {
+        private var cachedStockMap: Map<String, Int> = emptyMap()
+        private var cachedInStockProducts: List<Product>? = null
+
+        private val _inStockProductsState = MutableStateFlow<List<Product>>(emptyList())
+        val inStockProductsState: StateFlow<List<Product>> = _inStockProductsState.asStateFlow()
+    }
 
     // Каталог (как был) — статические данные продукции — создаются один раз
     private val products: List<Product> by lazy { buildProducts() }
 
+
     // ✅ Товары "в наличии" — отдельный набор (для Главной)
     private val inStockProducts: List<Product> by lazy { buildInStockProducts() }
+    init {
+        if (_inStockProductsState.value.isEmpty()) {
+            val initial = cachedInStockProducts ?: inStockProducts
+            _inStockProductsState.value = initial
+        }
+    }
+
+    suspend fun refreshInStockProducts(stockBaseUrl: String): List<Product> {
+        return try {
+            val service = StockService(stockBaseUrl)
+            val newStockMap = withTimeout(7000) { service.loadStock() }
+
+            val updatedProducts =
+                if (newStockMap == cachedStockMap && cachedInStockProducts != null) {
+                    cachedInStockProducts!!
+                } else {
+                    cachedStockMap = newStockMap
+
+                    inStockProducts.map { product ->
+                        product.copy(stockQty = newStockMap[product.id])
+                    }.also { updated ->
+                        cachedInStockProducts = updated
+                    }
+                }
+
+            _inStockProductsState.value = updatedProducts
+            updatedProducts
+        } catch (_: Exception) {
+            val fallback = cachedInStockProducts ?: inStockProducts
+            _inStockProductsState.value = fallback
+            fallback
+        }
+    }
+
+    fun observeInStockProducts(): StateFlow<List<Product>> {
+        return inStockProductsState
+    }
 
     fun getAllProducts(): Flow<Result<List<Product>>> = flow {
         emit(Result.Loading)
@@ -33,20 +83,9 @@ class ProductRepository(
     }.flowOn(Dispatchers.Default)
 
     fun getInStockProductsWithLiveQty(stockBaseUrl: String): Flow<Result<List<Product>>> = flow {
-        emit(Result.Success(inStockProducts)) // сразу список, без остатков
-
-        val merged: List<Product> = try {
-            val service = StockService(stockBaseUrl)
-            val stockMap = withTimeout(7000) { service.loadStock() }
-
-            inStockProducts.map { p ->
-                p.copy(stockQty = stockMap[p.id])
-            }
-        } catch (_: Exception) {
-            inStockProducts
-        }
-
-        emit(Result.Success(merged))
+        emit(Result.Success(inStockProductsState.value))
+        val updated = refreshInStockProducts(stockBaseUrl)
+        emit(Result.Success(updated))
     }.flowOn(Dispatchers.IO)
 
     fun getProductsByCategory(category: ProductCategory): Flow<Result<List<Product>>> = flow {
@@ -58,35 +97,33 @@ class ProductRepository(
     fun getProductById(id: String): Flow<Result<Product>> = flow {
         emit(Result.Loading)
 
-        // 1) Ищем сначала в складских, потом в обычных
-        val baseProduct = inStockProducts.find { it.id == id }
-            ?: products.find { it.id == id }
+        val stockBaseProduct = inStockProducts.find { it.id == id }
+        val regularBaseProduct = products.find { it.id == id }
+
+        val baseProduct = stockBaseProduct ?: regularBaseProduct
 
         if (baseProduct == null) {
             emit(Result.Error("Продукт не найден"))
             return@flow
         }
 
-        // 2) Для складских товаров подтягиваем остатки из Google Sheets
-        val isInStockProduct = inStockProducts.any { it.id == id }
-
-        if (!isInStockProduct) {
+        if (stockBaseProduct == null) {
             emit(Result.Success(baseProduct))
             return@flow
         }
 
-        val stockMap = try {
-            // ВАЖНО: baseUrl без /exec, со слэшем
-            val service = StockService(
-                "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
-            )
-            withTimeout(7000) { service.loadStock() }
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        val cachedProduct = inStockProductsState.value.find { it.id == id } ?: baseProduct
+        emit(Result.Success(cachedProduct))
 
-        val merged = baseProduct.copy(stockQty = stockMap[id])
-        emit(Result.Success(merged))
+        val updatedProducts = refreshInStockProducts(
+            "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
+        )
+
+        val updatedProduct = updatedProducts.find { it.id == id } ?: baseProduct
+
+        if (updatedProduct != cachedProduct) {
+            emit(Result.Success(updatedProduct))
+        }
     }.flowOn(Dispatchers.IO)
 
     fun searchProducts(query: String): Flow<Result<List<Product>>> = flow {
@@ -106,25 +143,69 @@ class ProductRepository(
     fun submitOrder(order: OrderRequest): Flow<Result<Boolean>> = flow {
         emit(Result.Loading)
 
+        val rawComment = order.comment.trim()
+
+        val companyBlockRegex = Regex(
+            """Данные юридического лица:\n(?:.*(?:\n|$))*?(?=(?:\n{2,}Комментарий клиента:|$))"""
+        )
+
+        val companyBlock = companyBlockRegex.find(rawComment)?.value?.trim().orEmpty()
+
+        val cleanedComment = rawComment
+            .replace(companyBlockRegex, "")
+            .replace(Regex("""\n{3,}"""), "\n\n")
+            .trim()
+
         val text = buildString {
             appendLine("📩 НОВАЯ ЗАЯВКА")
-            appendLine("👤 Имя: ${order.customerName}")
+            appendLine("👤 ФИО: ${order.customerName}")
             appendLine("📞 Телефон: ${order.phone}")
             appendLine("✉️ Email: ${order.email}")
-            appendLine("📦 Продукция: ${order.productName}")
-            appendLine("⚖️ Количество: ${order.quantity}")
-            if (order.comment.isNotBlank()) appendLine("📝 Комментарий: ${order.comment}")
 
-            val formattedTime = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(order.timestamp))
-            appendLine("🕒 Дата: $formattedTime")
+            if (companyBlock.isNotBlank()) {
+                appendLine()
+                appendLine(companyBlock)
+            }
+
+            if (cleanedComment.isNotBlank()) {
+                appendLine()
+                appendLine("📎 Состав корзины:")
+                append(cleanedComment)
+            }
         }
 
-        val sendResult = telegramService.sendText(text)
-        if (sendResult.isSuccess) {
-            emit(Result.Success(true))
-        } else {
-            emit(Result.Error(sendResult.exceptionOrNull()?.message ?: "Не удалось отправить в Telegram"))
+        val sendTextResult = telegramService.sendText(text)
+
+        if (sendTextResult.isFailure) {
+            emit(
+                Result.Error(
+                    sendTextResult.exceptionOrNull()?.message
+                        ?: "Не удалось отправить заявку в Telegram"
+                )
+            )
+            return@flow
         }
+
+        val attachment = order.attachment
+        if (attachment != null) {
+            val sendFileResult = telegramService.sendDocument(
+                fileName = attachment.fileName,
+                mimeType = attachment.mimeType,
+                bytes = attachment.bytes
+            )
+
+            if (sendFileResult.isFailure) {
+                emit(
+                    Result.Error(
+                        sendFileResult.exceptionOrNull()?.message
+                            ?: "Заявка отправлена, но файл ТЗ не удалось прикрепить"
+                    )
+                )
+                return@flow
+            }
+        }
+
+        emit(Result.Success(true))
     }.flowOn(Dispatchers.IO)
 
     fun getHomeData(): Flow<Result<HomeData>> = flow {

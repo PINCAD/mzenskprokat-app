@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.*
 /**
  * ViewModel для главного экрана
  */
-class HomeViewModel(
+class MainViewModel(
     repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
 

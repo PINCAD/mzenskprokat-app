@@ -6,7 +6,8 @@
     <!-- Навигация -->
     <string name="nav_home">Главная</string>
     <string name="nav_catalog">Каталог</string>
-    <string name="nav_order">Заказать</string>
+    <string name="nav_order">Корзина</string>
+    <string name="nav_profile">Профиль</string>
     <string name="nav_contacts">Контакты</string>
 
     <!-- Главная страница -->
@@ -55,7 +56,7 @@
     <string name="order_subtitle">Заполните форму, и мы свяжемся с вами</string>
     <string name="order_contact_data">Контактные данные</string>
     <string name="order_info">Информация о заказе</string>
-    <string name="order_name">Ваше имя *</string>
+    <string name="order_name">Ваше ФИО *</string>
     <string name="order_phone">Телефон *</string>
     <string name="order_phone_hint">+7 (XXX) XXX-XX-XX</string>
     <string name="order_email">Email *</string>

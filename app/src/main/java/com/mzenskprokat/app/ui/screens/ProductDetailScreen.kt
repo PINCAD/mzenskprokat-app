@@ -19,6 +19,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mzenskprokat.app.models.Product
 import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.viewmodels.ProductDetailViewModel
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mzenskprokat.app.models.CartItem
+import com.mzenskprokat.app.viewmodels.CartViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,24 +32,43 @@ fun ProductDetailScreen(
     productId: String,
     onBackClick: () -> Unit,
     onOrderClick: () -> Unit,
+    cartViewModel: CartViewModel,
     viewModel: ProductDetailViewModel = viewModel()
 ) {
     LaunchedEffect(productId) {
         viewModel.loadProduct(productId)
     }
 
-    val productState by viewModel.product.collectAsState()
+    val productState by viewModel.product.collectAsStateWithLifecycle()
+    val product = (productState as? Result.Success<Product>)?.data
 
-    // ✅ Реальное наличие берём только из Product.stockQty
+    var selectedAlloy by remember(product?.id) {
+        mutableStateOf(product?.alloys?.firstOrNull())
+    }
+    LaunchedEffect(product?.id) {
+        if (selectedAlloy == null) {
+            selectedAlloy = product?.alloys?.firstOrNull()
+        }
+    }
+    val cartItems by cartViewModel.cartItems.collectAsStateWithLifecycle()
+
+    val isInCart = product != null && selectedAlloy != null && cartItems.any {
+        it.productId == product.id && it.alloy == selectedAlloy
+    }
+
     val stockQty: Int? = (productState as? Result.Success<Product>)?.data?.stockQty
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Информация о продукте") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Назад"
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -54,53 +79,53 @@ fun ProductDetailScreen(
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Row(
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp
+            ) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(16.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onBackClick,
-                        modifier = Modifier.weight(1f)
+                    Button(
+                        onClick = {
+                            val currentProduct = product
+                            val alloy = selectedAlloy
+
+                            if (currentProduct != null && !alloy.isNullOrBlank()) {
+                                if (!isInCart) {
+                                    cartViewModel.addToCart(
+                                        CartItem(
+                                            productId = currentProduct.id,
+                                            productName = currentProduct.name,
+                                            alloy = alloy,
+                                            quantity = ""
+                                        )
+                                    )
+                                } else {
+                                    onOrderClick()
+                                }
+                            }
+                        },
+                        enabled = product != null && !selectedAlloy.isNullOrBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = if (isInCart) {
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     ) {
-                        Text("Назад")
-                    }
-
-                    // ✅ Логика кнопки по наличию
-                    when {
-                        stockQty == null -> {
-                            Button(
-                                onClick = onOrderClick,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Заказать")
-                            }
-                        }
-
-                        stockQty <= 0 -> {
-                            Button(
-                                onClick = {},
-                                enabled = false,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Нет в наличии")
-                            }
-                        }
-
-                        else -> {
-                            Button(
-                                onClick = onOrderClick,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Купить")
-                            }
-                        }
+                        Icon(Icons.Outlined.ShoppingCart, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isInCart) "Перейти в корзину" else "Купить")
                     }
                 }
             }
@@ -111,6 +136,7 @@ fun ProductDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
@@ -121,7 +147,12 @@ fun ProductDetailScreen(
             is Result.Success -> {
                 ProductDetailContent(
                     product = state.data,
-                    modifier = Modifier.padding(paddingValues)
+                    selectedAlloy = selectedAlloy,
+                    onAlloySelected = { selectedAlloy = it },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(paddingValues)
                 )
             }
 
@@ -129,6 +160,7 @@ fun ProductDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
@@ -157,18 +189,25 @@ fun ProductDetailScreen(
 @Composable
 fun ProductDetailContent(
     product: Product,
+    selectedAlloy: String?,
+    onAlloySelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val stockQty = product.stockQty // ✅ берём прямо из product
+    val stockQty = product.stockQty
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Заголовок
         item {
             Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
@@ -185,15 +224,17 @@ fun ProductDetailContent(
                         style = MaterialTheme.typography.bodyLarge
                     )
 
-                    // ✅ Плашка наличия (только если это "в наличии", то есть stockQty != null)
                     if (stockQty != null) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Card(
+                            modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (stockQty > 0)
+                                containerColor = if (stockQty > 0) {
                                     MaterialTheme.colorScheme.secondaryContainer
-                                else
+                                } else {
                                     MaterialTheme.colorScheme.errorContainer
+                                }
                             )
                         ) {
                             Row(
@@ -203,16 +244,25 @@ fun ProductDetailContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = if (stockQty > 0) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                                    imageVector = if (stockQty > 0) {
+                                        Icons.Outlined.CheckCircle
+                                    } else {
+                                        Icons.Outlined.Warning
+                                    },
                                     contentDescription = null,
-                                    tint = if (stockQty > 0)
+                                    tint = if (stockQty > 0) {
                                         MaterialTheme.colorScheme.secondary
-                                    else
+                                    } else {
                                         MaterialTheme.colorScheme.error
+                                    }
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = if (stockQty > 0) "В наличии: $stockQty шт." else "Нет в наличии",
+                                    text = if (stockQty > 0) {
+                                        "В наличии: $stockQty шт."
+                                    } else {
+                                        "Нет в наличии"
+                                    },
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -223,7 +273,6 @@ fun ProductDetailContent(
             }
         }
 
-        // Характеристики
         item {
             Text(
                 text = "Характеристики",
@@ -232,8 +281,16 @@ fun ProductDetailContent(
             )
         }
 
-        items(product.specifications) { spec ->
-            Card {
+        items(
+            items = product.specifications,
+            key = { it }
+        ) { spec ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -255,7 +312,6 @@ fun ProductDetailContent(
             }
         }
 
-        // Список сплавов
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -266,7 +322,12 @@ fun ProductDetailContent(
         }
 
         item {
-            Card {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -279,22 +340,28 @@ fun ProductDetailContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowAlloys.forEach { alloy ->
-                                SuggestionChip(
-                                    onClick = {},
+                                FilterChip(
+                                    selected = selectedAlloy == alloy,
+                                    onClick = { onAlloySelected(alloy) },
                                     label = { Text(alloy) },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
-                            if (rowAlloys.size == 1) Spacer(modifier = Modifier.weight(1f))
+                            if (rowAlloys.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Информация
         item {
             Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer
                 )
@@ -319,11 +386,11 @@ fun ProductDetailContent(
 
                     val infoText =
                         if (stockQty == null) {
-                            "Для оформления заказа нажмите кнопку \"Заказать\" ниже или свяжитесь с нами по телефону или электронной почте."
+                            "Выберите марку сплава и нажмите кнопку \"Купить\", чтобы добавить товар в корзину."
                         } else if (stockQty > 0) {
-                            "Товар есть в наличии. Нажмите \"Купить\" ниже или свяжитесь с нами для уточнения условий и отгрузки."
+                            "Товар есть в наличии. Выберите марку сплава и нажмите \"Купить\", чтобы добавить его в корзину."
                         } else {
-                            "Сейчас товара нет в наличии. Перейдите в каталог и оформите заказ, либо свяжитесь с нами."
+                            "Сейчас товара нет в наличии. Вы можете выбрать сплав и добавить товар в корзину для последующего оформления."
                         }
 
                     Text(
@@ -334,6 +401,8 @@ fun ProductDetailContent(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }

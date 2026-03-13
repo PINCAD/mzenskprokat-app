@@ -1,10 +1,10 @@
 package com.mzenskprokat.app.api
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
-import retrofit2.http.Body
-import retrofit2.http.POST
-import retrofit2.http.Url
+import retrofit2.http.*
 
 interface TelegramApiService {
 
@@ -12,6 +12,15 @@ interface TelegramApiService {
     suspend fun sendMessage(
         @Url url: String,
         @Body message: TelegramMessage
+    ): Response<TelegramResponse>
+
+    @Multipart
+    @POST
+    suspend fun sendDocument(
+        @Url url: String,
+        @Part("chat_id") chatId: RequestBody,
+        @Part document: MultipartBody.Part,
+        @Part("caption") caption: RequestBody?
     ): Response<TelegramResponse>
 }
 

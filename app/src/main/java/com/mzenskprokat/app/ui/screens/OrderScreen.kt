@@ -1,212 +1,329 @@
 package com.mzenskprokat.app.ui.screens
 
-import androidx.compose.foundation.layout.*
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.RemoveShoppingCart
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mzenskprokat.app.data.ProfileStorage
+import com.mzenskprokat.app.models.OrderAttachment
 import com.mzenskprokat.app.models.OrderRequest
 import com.mzenskprokat.app.models.Result
+import com.mzenskprokat.app.viewmodels.CartViewModel
 import com.mzenskprokat.app.viewmodels.OrderViewModel
-import androidx.compose.material.icons.automirrored.outlined.List
-import androidx.compose.material.icons.automirrored.outlined.Send
+import com.mzenskprokat.app.data.OrderHistoryStorage
+import com.mzenskprokat.app.models.OrderHistoryItem
 
 @Composable
 fun OrderScreen(
+    cartViewModel: CartViewModel,
     orderViewModel: OrderViewModel = viewModel()
 ) {
-    var customerName by rememberSaveable { mutableStateOf("") }
-    var phone by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
-    var productName by rememberSaveable { mutableStateOf("") }
-    var quantity by rememberSaveable { mutableStateOf("") }
+    var lastSubmittedItemsText by remember { mutableStateOf("") }
+    var lastSubmittedComment by remember { mutableStateOf("") }
+    var lastSubmittedAttachmentName by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val profileStorage = remember { ProfileStorage(context) }
+
+    val orderHistoryStorage = remember { OrderHistoryStorage(context) }
+
     var comment by rememberSaveable { mutableStateOf("") }
+    var selectedFileName by rememberSaveable { mutableStateOf("") }
+    var selectedAttachment by remember { mutableStateOf<OrderAttachment?>(null) }
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var showErrorDialog by remember { mutableStateOf(false) }
+    var localErrorMessage by remember { mutableStateOf<String?>(null) }
 
+    val cartItems by cartViewModel.cartItems.collectAsStateWithLifecycle()
     val orderState by orderViewModel.orderState.collectAsStateWithLifecycle()
 
+    val profile = profileStorage.getProfile()
+    val isProfileComplete = profile.name.isNotBlank() &&
+            profile.phone.isNotBlank() &&
+            profile.email.isNotBlank()
+
     val isLoading = orderState is Result.Loading
-    val errorMessage = (orderState as? Result.Error)?.message
+    val orderErrorMessage = (orderState as? Result.Error)?.message
+    val errorMessage = localErrorMessage ?: orderErrorMessage
     val isSuccess = (orderState as? Result.Success)?.data == true
 
-    val isFormValid by remember(customerName, phone, email, productName, quantity) {
+    val isFormValid by remember(profile.name, profile.phone, profile.email, cartItems) {
         derivedStateOf {
-            customerName.isNotBlank() &&
-                    phone.isNotBlank() &&
-                    email.isNotBlank() &&
-                    productName.isNotBlank() &&
-                    quantity.isNotBlank()
+            isProfileComplete &&
+                    cartItems.isNotEmpty() &&
+                    cartItems.all { it.quantity.isNotBlank() }
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        val fileName = queryFileName(context.contentResolver, uri) ?: "technical_specification"
+        val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+
+        if (bytes != null) {
+            selectedAttachment = OrderAttachment(
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes
+            )
+            selectedFileName = fileName
         }
     }
 
     fun clearForm() {
-        customerName = ""
-        phone = ""
-        email = ""
-        productName = ""
-        quantity = ""
         comment = ""
+        selectedFileName = ""
+        selectedAttachment = null
     }
 
     LaunchedEffect(isSuccess) {
-        if (isSuccess) showSuccessDialog = true
+        if (isSuccess) {
+            orderHistoryStorage.saveOrder(
+                OrderHistoryItem(
+                    id = System.currentTimeMillis(),
+                    createdAt = System.currentTimeMillis(),
+                    itemsText = lastSubmittedItemsText,
+                    comment = lastSubmittedComment,
+                    attachmentFileName = lastSubmittedAttachmentName,
+                    status = "Отправлена"
+                )
+            )
+            showSuccessDialog = true
+        }
     }
 
-    LaunchedEffect(errorMessage) {
-        if (!errorMessage.isNullOrBlank()) showErrorDialog = true
+    LaunchedEffect(orderErrorMessage) {
+        if (!orderErrorMessage.isNullOrBlank()) {
+            showErrorDialog = true
+        }
     }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+        if (cartItems.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ShoppingCart,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Оформление заказа",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Заполните форму, и мы свяжемся с вами",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.RemoveShoppingCart,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Корзина пуста",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
+            }
+        } else {
+            items(
+                items = cartItems,
+                key = { "${it.productId}_${it.alloy}" }
+            ) { item ->
+                CartItemCard(
+                    productName = item.productName,
+                    alloy = item.alloy,
+                    quantity = item.quantity,
+                    onQuantityChange = { newQuantity ->
+                        cartViewModel.updateItemQuantity(item.productId, item.alloy, newQuantity)
+                    },
+                    onRemove = {
+                        cartViewModel.removeFromCart(item.productId, item.alloy)
+                    }
+                )
             }
         }
 
         item {
-            Text("Контактные данные", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-
-        item {
-            OutlinedTextField(
-                value = customerName,
-                onValueChange = { customerName = it },
-                label = { Text("Ваше имя *") },
-                leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !isLoading
+            Text(
+                text = "Техническое задание",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
         }
 
         item {
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text("Телефон *") },
-                leadingIcon = { Icon(Icons.Outlined.Phone, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                singleLine = true,
-                placeholder = { Text("+7 (XXX) XXX-XX-XX") },
-                enabled = !isLoading
-            )
-        }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Контактные данные из профиля",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
 
-        item {
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email *") },
-                leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                singleLine = true,
-                placeholder = { Text("example@mail.com") },
-                enabled = !isLoading
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Информация о заказе", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-
-        item {
-            OutlinedTextField(
-                value = productName,
-                onValueChange = { productName = it },
-                label = { Text("Наименование продукции *") },
-                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.List, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("Например: Х20Н80") },
-                enabled = !isLoading
-            )
-        }
-
-        item {
-            OutlinedTextField(
-                value = quantity,
-                onValueChange = { quantity = it },
-                label = { Text("Количество *") },
-                leadingIcon = { Icon(Icons.Outlined.Scale, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("Например: 100 кг") },
-                enabled = !isLoading
-            )
+                    if (isProfileComplete) {
+                        Text(
+                            text = "ФИО: ${profile.name}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Телефон: ${profile.phone}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Email: ${profile.email}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Text(
+                            text = "Профиль не заполнен. Чтобы отправить заявку, заполните ФИО, телефон и email на странице «Профиль».",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
         }
 
         item {
             OutlinedTextField(
                 value = comment,
                 onValueChange = { comment = it },
-                label = { Text("Комментарий (необязательно)") },
+                label = { Text("Комментарий или описание ТЗ") },
                 leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                maxLines = 5,
-                placeholder = { Text("Дополнительная информация к заказу") },
+                maxLines = 6,
                 enabled = !isLoading
             )
         }
 
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            OutlinedButton(
+                onClick = {
+                    filePickerLauncher.launch(arrayOf("*/*"))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Outlined.AttachFile, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (selectedFileName.isBlank()) {
+                        "Загрузить файл ТЗ"
+                    } else {
+                        "Изменить файл ТЗ"
+                    }
+                )
+            }
+        }
+
+        if (selectedFileName.isNotBlank()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "После отправки заявки наш менеджер свяжется с вами для уточнения деталей и расчета стоимости заказа.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = selectedFileName,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        TextButton(
+                            onClick = {
+                                selectedAttachment = null
+                                selectedFileName = ""
+                            },
+                            enabled = !isLoading
+                        ) {
+                            Text("Удалить")
+                        }
+                    }
                 }
             }
         }
@@ -214,15 +331,70 @@ fun OrderScreen(
         item {
             Button(
                 onClick = {
+                    if (!isProfileComplete) {
+                        localErrorMessage = "Заполните профиль перед отправкой заявки"
+                        showErrorDialog = true
+                        return@Button
+                    }
+
+                    val cartText = cartItems.joinToString(separator = "\n") { item ->
+                        "• ${item.productName}\n  Сплав: ${item.alloy}\n  Количество: ${item.quantity}"
+                    }
+
+                    val finalComment = buildString {
+                        appendLine(cartText)
+
+                        if (profile.isCompany) {
+                            val hasAnyCompanyData =
+                                profile.companyName.isNotBlank() ||
+                                        profile.inn.isNotBlank() ||
+                                        profile.kpp.isNotBlank() ||
+                                        profile.city.isNotBlank() ||
+                                        profile.position.isNotBlank()
+
+                            if (hasAnyCompanyData) {
+                                appendLine()
+                                appendLine("Данные юридического лица:")
+
+                                if (profile.companyName.isNotBlank()) {
+                                    appendLine("Компания: ${profile.companyName}")
+                                }
+                                if (profile.inn.isNotBlank()) {
+                                    appendLine("ИНН: ${profile.inn}")
+                                }
+                                if (profile.kpp.isNotBlank()) {
+                                    appendLine("КПП: ${profile.kpp}")
+                                }
+                                if (profile.city.isNotBlank()) {
+                                    appendLine("Город: ${profile.city}")
+                                }
+                                if (profile.position.isNotBlank()) {
+                                    appendLine("Должность: ${profile.position}")
+                                }
+                            }
+                        }
+
+                        if (comment.isNotBlank()) {
+                            append("\n\nКомментарий клиента:\n")
+                            append(comment.trim())
+                        }
+                    }
+
                     val order = OrderRequest(
-                        customerName = customerName.trim(),
-                        phone = phone.trim(),
-                        email = email.trim(),
-                        productName = productName.trim(),
-                        quantity = quantity.trim(),
-                        comment = comment.trim(),
-                        timestamp = System.currentTimeMillis()
+                        customerName = profile.name.trim(),
+                        phone = profile.phone.trim(),
+                        email = profile.email.trim(),
+                        productName = "",
+                        quantity = "",
+                        comment = finalComment,
+                        timestamp = System.currentTimeMillis(),
+                        attachment = selectedAttachment
                     )
+
+                    localErrorMessage = null
+                    lastSubmittedItemsText = cartText
+                    lastSubmittedComment = comment.trim()
+                    lastSubmittedAttachmentName = selectedAttachment?.fileName
                     orderViewModel.submitOrder(order)
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -243,7 +415,9 @@ fun OrderScreen(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 
     if (showSuccessDialog) {
@@ -251,24 +425,22 @@ fun OrderScreen(
             onDismissRequest = {
                 showSuccessDialog = false
                 orderViewModel.resetOrderState()
+                cartViewModel.clearCart()
                 clearForm()
             },
-            icon = {
-                Icon(
-                    Icons.Outlined.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
-                )
-            },
-            title = { Text("Заявка отправлена!") },
-            text = { Text("Спасибо! Наш менеджер свяжется с вами в ближайшее время.") },
+            title = { Text("Заявка отправлена") },
+            text = { Text("Менеджер получил вашу корзину и свяжется с вами.") },
             confirmButton = {
-                Button(onClick = {
-                    showSuccessDialog = false
-                    orderViewModel.resetOrderState()
-                    clearForm()
-                }) { Text("Отлично") }
+                Button(
+                    onClick = {
+                        showSuccessDialog = false
+                        orderViewModel.resetOrderState()
+                        cartViewModel.clearCart()
+                        clearForm()
+                    }
+                ) {
+                    Text("OK")
+                }
             }
         )
     }
@@ -277,34 +449,91 @@ fun OrderScreen(
         AlertDialog(
             onDismissRequest = {
                 showErrorDialog = false
+                localErrorMessage = null
                 orderViewModel.resetOrderState()
             },
-            icon = {
-                Icon(
-                    Icons.Outlined.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(48.dp)
-                )
-            },
             title = { Text("Ошибка отправки") },
-            text = { Text(errorMessage ?: "Произошла ошибка при отправке заказа. Попробуйте позже.") },
+            text = {
+                Text(errorMessage ?: "Попробуйте позже.")
+            },
             confirmButton = {
-                Button(onClick = {
-                    showErrorDialog = false
-                    orderViewModel.resetOrderState()
-                }) { Text("OK") }
+                Button(
+                    onClick = {
+                        showErrorDialog = false
+                        localErrorMessage = null
+                        orderViewModel.resetOrderState()
+                    }
+                ) {
+                    Text("OK")
+                }
             }
         )
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-private fun OrderScreenPreview() {
-    MaterialTheme {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("OrderScreen Preview")
+private fun CartItemCard(
+    productName: String,
+    alloy: String,
+    quantity: String,
+    onQuantityChange: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = productName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "Сплав: $alloy",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = onQuantityChange,
+                    label = { Text("Количество") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                OutlinedButton(
+                    onClick = onRemove,
+                    modifier = Modifier.height(56.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Удалить"
+                    )
+                }
+            }
         }
     }
+}
+
+private fun queryFileName(contentResolver: ContentResolver, uri: Uri): String? {
+    val cursor = contentResolver.query(uri, null, null, null, null) ?: return null
+    cursor.use {
+        val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (it.moveToFirst() && nameIndex >= 0) {
+            return it.getString(nameIndex)
+        }
+    }
+    return null
 }
