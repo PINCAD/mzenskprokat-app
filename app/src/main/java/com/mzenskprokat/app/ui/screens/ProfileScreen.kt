@@ -45,7 +45,7 @@ import com.mzenskprokat.app.models.OrderHistoryItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.mzenskprokat.app.data.ProfileData
+import com.mzenskprokat.app.models.ProfileData
 
 @Composable
 fun ProfileScreen() {
@@ -392,10 +392,10 @@ private fun ProfileTypeCard(
     Card(
         modifier = modifier,
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
-                MaterialTheme.colorScheme.primaryContainer
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
             } else {
                 MaterialTheme.colorScheme.surfaceVariant
             }
@@ -420,7 +420,7 @@ private fun ProfileTypeCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    MaterialTheme.colorScheme.onSurface
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }

@@ -409,4 +409,40 @@ class ProductRepository(
             )
         )
     }
+
+    fun getCatalogData(query: String = ""): Flow<Result<CatalogData>> = flow {
+        emit(Result.Loading)
+
+        val q = query.trim()
+
+        val currentInStock = inStockProductsState.value.ifEmpty { inStockProducts }
+        val currentOnOrder = products
+
+        val filteredInStock = if (q.isBlank()) {
+            currentInStock
+        } else {
+            currentInStock.filter { product ->
+                product.name.contains(q, ignoreCase = true) ||
+                        product.alloys.any { it.contains(q, ignoreCase = true) }
+            }
+        }
+
+        val filteredOnOrder = if (q.isBlank()) {
+            currentOnOrder
+        } else {
+            currentOnOrder.filter { product ->
+                product.name.contains(q, ignoreCase = true) ||
+                        product.alloys.any { it.contains(q, ignoreCase = true) }
+            }
+        }
+
+        emit(
+            Result.Success(
+                CatalogData(
+                    inStock = filteredInStock,
+                    onOrder = filteredOnOrder
+                )
+            )
+        )
+    }.flowOn(Dispatchers.Default)
 }

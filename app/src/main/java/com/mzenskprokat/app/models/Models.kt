@@ -68,3 +68,8 @@ data class HomeData(
     ),
     val contactInfo: ContactInfo = ContactInfo()
 )
+
+data class CatalogData(
+    val inStock: List<Product>,
+    val onOrder: List<Product>
+)

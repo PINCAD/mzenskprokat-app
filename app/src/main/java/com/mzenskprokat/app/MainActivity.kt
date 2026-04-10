@@ -220,8 +220,7 @@ fun MainTabsScreen(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        },
-                        onNavigateToProductDetail = onOpenProduct
+                        }
                     )
                 }
 

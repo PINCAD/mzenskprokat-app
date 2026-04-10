@@ -5,70 +5,72 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+private val Accent = Color(0xFF19B5C3)
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF1C5D9C),  // Промышленный синий
+    primary = Accent,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE3F2FD),
-    onPrimaryContainer = Color(0xFF0D47A1),
+    primaryContainer = Color(0xFFD9F5F8),
+    onPrimaryContainer = Color(0xFF08363A),
 
-    secondary = Color(0xFF455A64),  // Стальной серый
+    secondary = Color(0xFF4B5B60),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFECEFF1),
-    onSecondaryContainer = Color(0xFF263238),
+    secondaryContainer = Color(0xFFE7EFF1),
+    onSecondaryContainer = Color(0xFF1E2A2E),
 
-    tertiary = Color(0xFFFF6F00),  // Оранжевый акцент (металлургия)
+    tertiary = Color(0xFF0F1720),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFE0B2),
-    onTertiaryContainer = Color(0xFFE65100),
+    tertiaryContainer = Color(0xFFE8ECEF),
+    onTertiaryContainer = Color(0xFF111827),
 
-    background = Color(0xFFFAFAFA),
-    onBackground = Color(0xFF212121),
+    background = Color(0xFFF6F8F9),
+    onBackground = Color(0xFF111315),
+
     surface = Color.White,
-    onSurface = Color(0xFF212121),
-    surfaceVariant = Color(0xFFF5F5F5),
-    onSurfaceVariant = Color(0xFF616161),
+    onSurface = Color(0xFF111315),
+    surfaceVariant = Color(0xFFF0F4F5),
+    onSurfaceVariant = Color(0xFF5C676B),
 
     error = Color(0xFFD32F2F),
     onError = Color.White,
-    errorContainer = Color(0xFFFFCDD2),
-    onErrorContainer = Color(0xFFB71C1C),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
 
-    outline = Color(0xFFBDBDBD),
-    outlineVariant = Color(0xFFE0E0E0)
+    outline = Color(0xFFD5DDE0),
+    outlineVariant = Color(0xFFE6ECEE)
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF42A5F5),
-    onPrimary = Color(0xFF0D47A1),
-    primaryContainer = Color(0xFF1565C0),
-    onPrimaryContainer = Color(0xFFBBDEFB),
+    primary = Color(0xFF48D1DB),
+    onPrimary = Color(0xFF00363B),
+    primaryContainer = Color(0xFF004F56),
+    onPrimaryContainer = Color(0xFF97F0F6),
 
-    secondary = Color(0xFFFFB74D),
-    onSecondary = Color(0xFFE65100),
-    secondaryContainer = Color(0xFFFF8F00),
-    onSecondaryContainer = Color(0xFFFFE0B2),
+    secondary = Color(0xFFB7C8CD),
+    onSecondary = Color(0xFF223236),
+    secondaryContainer = Color(0xFF394A4F),
+    onSecondaryContainer = Color(0xFFD3E4E9),
 
-    tertiary = Color(0xFF66BB6A),
-    onTertiary = Color(0xFF1B5E20),
-    tertiaryContainer = Color(0xFF2E7D32),
-    onTertiaryContainer = Color(0xFFC8E6C9),
+    tertiary = Color(0xFFD4DCE0),
+    onTertiary = Color(0xFF263238),
+    tertiaryContainer = Color(0xFF3B474D),
+    onTertiaryContainer = Color(0xFFEAF1F4),
 
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFE0E0E0),
+    background = Color(0xFF0F1416),
+    onBackground = Color(0xFFE7ECEE),
 
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE0E0E0),
-    surfaceVariant = Color(0xFF2C2C2C),
-    onSurfaceVariant = Color(0xFFBDBDBD),
+    surface = Color(0xFF151B1D),
+    onSurface = Color(0xFFE7ECEE),
+    surfaceVariant = Color(0xFF222A2D),
+    onSurfaceVariant = Color(0xFFBCC7CB),
 
-    error = Color(0xFFEF5350),
-    onError = Color(0xFFB71C1C),
-    errorContainer = Color(0xFFC62828),
-    onErrorContainer = Color(0xFFFFCDD2),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
 
-    outline = Color(0xFF616161),
-    outlineVariant = Color(0xFF424242)
+    outline = Color(0xFF3E484C),
+    outlineVariant = Color(0xFF2A3235)
 )
 
 @Composable

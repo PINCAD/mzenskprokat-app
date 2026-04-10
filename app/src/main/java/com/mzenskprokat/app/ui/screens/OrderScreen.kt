@@ -61,6 +61,11 @@ import com.mzenskprokat.app.viewmodels.CartViewModel
 import com.mzenskprokat.app.viewmodels.OrderViewModel
 import com.mzenskprokat.app.data.OrderHistoryStorage
 import com.mzenskprokat.app.models.OrderHistoryItem
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 
 @Composable
 fun OrderScreen(
@@ -192,17 +197,20 @@ fun OrderScreen(
                 items = cartItems,
                 key = { "${it.productId}_${it.alloy}" }
             ) { item ->
-                CartItemCard(
-                    productName = item.productName,
-                    alloy = item.alloy,
-                    quantity = item.quantity,
-                    onQuantityChange = { newQuantity ->
-                        cartViewModel.updateItemQuantity(item.productId, item.alloy, newQuantity)
-                    },
-                    onRemove = {
+                SwipeToDeleteCartItem(
+                    onDelete = {
                         cartViewModel.removeFromCart(item.productId, item.alloy)
                     }
-                )
+                ) {
+                    CartItemCard(
+                        productName = item.productName,
+                        alloy = item.alloy,
+                        quantity = item.quantity,
+                        onQuantityChange = { newQuantity ->
+                            cartViewModel.updateItemQuantity(item.productId, item.alloy, newQuantity)
+                        }
+                    )
+                }
             }
         }
 
@@ -214,42 +222,29 @@ fun OrderScreen(
             )
         }
 
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "Контактные данные из профиля",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
+        if (!isProfileComplete) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Профиль не заполнен",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
 
-                    if (isProfileComplete) {
                         Text(
-                            text = "ФИО: ${profile.name}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Телефон: ${profile.phone}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Email: ${profile.email}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        Text(
-                            text = "Профиль не заполнен. Чтобы отправить заявку, заполните ФИО, телефон и email на странице «Профиль».",
+                            text = "Чтобы отправить заявку, заполните ФИО, телефон и email на странице «Профиль».",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -476,53 +471,43 @@ private fun CartItemCard(
     productName: String,
     alloy: String,
     quantity: String,
-    onQuantityChange: (String) -> Unit,
-    onRemove: () -> Unit
+    onQuantityChange: (String) -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp)
+            .clip(RoundedCornerShape(22.dp)),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
                 text = productName,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
                 text = "Сплав: $alloy",
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Row(
+            OutlinedTextField(
+                value = quantity,
+                onValueChange = onQuantityChange,
+                label = { Text("Количество") },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                OutlinedTextField(
-                    value = quantity,
-                    onValueChange = onQuantityChange,
-                    label = { Text("Количество") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
-
-                OutlinedButton(
-                    onClick = onRemove,
-                    modifier = Modifier.height(56.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Удалить"
-                    )
-                }
-            }
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp)
+            )
         }
     }
 }
@@ -536,4 +521,54 @@ private fun queryFileName(contentResolver: ContentResolver, uri: Uri): String? {
         }
     }
     return null
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDeleteCartItem(
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            Card(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(22.dp)),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(end = 20.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Удалить",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        content = { content() }
+    )
 }
