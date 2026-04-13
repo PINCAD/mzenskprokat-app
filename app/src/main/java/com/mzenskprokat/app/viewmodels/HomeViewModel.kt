@@ -10,9 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.mzenskprokat.app.utils.Constants
 
-private const val STOCK_BASE_URL =
-    "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
 
 class HomeViewModel : ViewModel() {
 
@@ -37,7 +36,7 @@ class HomeViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                repository.refreshInStockProducts(STOCK_BASE_URL)
+                repository.refreshInStockProducts(Constants.STOCK_BASE_URL)
             } finally {
                 _isRefreshing.value = false
             }

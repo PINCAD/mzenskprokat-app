@@ -13,6 +13,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.mzenskprokat.app.utils.Constants
 
 class ProductRepository(
 
@@ -115,9 +116,7 @@ class ProductRepository(
         val cachedProduct = inStockProductsState.value.find { it.id == id } ?: baseProduct
         emit(Result.Success(cachedProduct))
 
-        val updatedProducts = refreshInStockProducts(
-            "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
-        )
+        val updatedProducts = refreshInStockProducts(Constants.STOCK_BASE_URL)
 
         val updatedProduct = updatedProducts.find { it.id == id } ?: baseProduct
 

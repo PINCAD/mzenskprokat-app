@@ -2,23 +2,23 @@ package com.mzenskprokat.app.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mzenskprokat.app.models.*
+import com.mzenskprokat.app.models.CatalogData
+import com.mzenskprokat.app.models.Product
+import com.mzenskprokat.app.models.Result
 import com.mzenskprokat.app.repository.ProductRepository
+import com.mzenskprokat.app.utils.Constants
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-/**
- * ViewModel для главного экрана
- */
-class MainViewModel(
-    repository: ProductRepository = ProductRepository()
-) : ViewModel() {
-
-    val homeData: StateFlow<Result<HomeData>> =
-        repository.getHomeData()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Result.Loading)
-}
 
 /**
  * ViewModel для каталога продукции
@@ -27,11 +27,6 @@ class MainViewModel(
 class ProductCatalogViewModel(
     private val repository: ProductRepository = ProductRepository()
 ) : ViewModel() {
-
-    companion object {
-        private const val STOCK_BASE_URL =
-            "https://script.google.com/macros/s/AKfycbw2REw35KBw_RSk9uxFYduMD9k4U75vUbAPoiZb4rhblXbhzUEVm58nhVGdEDx8lgLe/"
-    }
 
     private val searchQuery = MutableStateFlow("")
     private val refreshTrigger = MutableStateFlow(0)
@@ -61,7 +56,7 @@ class ProductCatalogViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                repository.refreshInStockProducts(STOCK_BASE_URL)
+                repository.refreshInStockProducts(Constants.STOCK_BASE_URL)
                 refreshTrigger.value += 1
             } finally {
                 _isRefreshing.value = false

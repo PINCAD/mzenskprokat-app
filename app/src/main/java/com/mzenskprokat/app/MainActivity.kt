@@ -40,7 +40,7 @@ import com.mzenskprokat.app.ui.theme.MzenskProkatTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mzenskprokat.app.viewmodels.CartViewModel
 import androidx.compose.material.icons.filled.Person
-import com.mzenskprokat.app.profile.ProfileScreen
+import com.mzenskprokat.app.ui.screens.ProfileScreen
 
 
 

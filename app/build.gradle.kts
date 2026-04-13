@@ -81,7 +81,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
 
-    // Compose
+    // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -91,8 +91,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.material:material")
 
-    // Navigation + lifecycle compose
+    // Navigation + lifecycle
     implementation("androidx.navigation:navigation-compose:2.7.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
@@ -100,16 +101,23 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Network (одна версия OkHttp во всём проекте)
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    // Network — ОДНА версия Retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // Логи сети — ТОЛЬКО DEBUG (ускоряет release и не светит данные)
-    debugImplementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Images
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Moshi
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+
+    // Images — ОДНА версия Coil
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Tests
     testImplementation("junit:junit:4.13.2")
@@ -118,14 +126,4 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
-    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
-
-    implementation("androidx.compose.material:material")
-
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    implementation("io.coil-kt:coil-compose:2.6.0")
 }

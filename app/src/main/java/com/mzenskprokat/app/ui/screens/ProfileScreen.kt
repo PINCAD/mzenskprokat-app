@@ -1,4 +1,4 @@
-package com.mzenskprokat.app.profile
+package com.mzenskprokat.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
