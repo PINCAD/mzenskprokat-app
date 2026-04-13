@@ -202,26 +202,7 @@ fun MainTabsScreen(
                 popExitTransition = { ExitTransition.None }
             ) {
                 composable(Screen.Home.route) {
-                    HomeScreen(
-                        onNavigateToCatalog = {
-                            navController.navigate(Screen.Catalog.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        onNavigateToOrder = {
-                            navController.navigate(Screen.Order.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    )
+                    HomeScreen()
                 }
 
                 composable(Screen.Catalog.route) {

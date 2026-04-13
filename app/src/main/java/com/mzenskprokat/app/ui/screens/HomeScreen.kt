@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -74,10 +71,7 @@ private data class RemoteImage(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(
-    onNavigateToCatalog: () -> Unit,
-    onNavigateToOrder: () -> Unit
-) {
+fun HomeScreen() {
     val certificates = listOf(
         RemoteImage(
             previewUrl = "https://optim.tildacdn.com/tild6533-6664-4134-a563-373961376435/-/cover/432x432/center/center/-/format/webp/_.jpg.webp",

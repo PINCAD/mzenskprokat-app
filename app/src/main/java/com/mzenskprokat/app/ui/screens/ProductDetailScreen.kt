@@ -56,8 +56,6 @@ fun ProductDetailScreen(
         it.productId == product.id && it.alloy == selectedAlloy
     }
 
-    val stockQty: Int? = (productState as? Result.Success<Product>)?.data?.stockQty
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
